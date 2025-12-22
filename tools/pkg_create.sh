@@ -28,22 +28,79 @@ set -ueo pipefail
 # Usage:
 ###############################################################################
 
-### Handle command line args and error checks
-if [[ $# -ne 1 ]]; then
-    echo "ERR: Missing parameters"
-    echo "Usage: $0 <package_name>"
+
+### Helpers ------------------------------------------------------------
+die() {
+    echo -e "$*" >&2
     exit 1
-fi
+}
 
-pkg_name="$1"
+cleanup() {
+    echo "ERR: pkg_create failed at: $BASH_COMMAND" >&2
+    echo "Line number: $LINENO" >&2
+    echo "Cleaning up..." >&2
+    [[ -d "$pkg_name" ]] && rm -rf "$pkg_name"
+}
 
-if [[ -d "$pkg_name" ]]; then
-    echo "ERR: Package already exists" # will do more error checking later
-    exit 1
-fi
+template_readme() {
+    cat > "$pkg_name"/README.md <<EOF
+# $pkg_name DDS Package
 
-### Create package
-mkdir -p "$pkg_name"/{src,include,config,launch,logs}
-touch "$pkg_name"/{Makefile,README.md}
+## Description
+Briefly describe the purpose of this DDS node.
 
-echo "Package $pkg_name created successfully"
+## Topics Published to
+Enter topics published to below
+Topic | C++ Type | Description
+------|------|------------
+/domain/subsystem/topic|\`C++ Type\`|BMS Voltage
+
+## Topics Subscribed to
+Enter topics subscribed to below
+Topic | C++ Type | Description
+------|----------|------------
+/domain/subsystem/topic|\`C++ Type\`|BMS Voltage
+
+
+## Parameters
+Under construction!
+
+## Acknowledgements
+Written by \`Your name here\` | \`Your zID here\`
+EOF
+}
+
+### Core functions -----------------------------------------------------
+# Creates pkg given a name. No error handling
+create_pkg() {
+
+    mkdir -p "$pkg_name"/{src,include,config,launch,logs}
+    touch "$pkg_name"/{Makefile,README.md}
+
+    # Fill out templates
+    template_readme
+}
+
+
+### Main function ------------------------------------------------------
+main() {
+    # command line args check
+    if [[ $# -ne 1 ]]; then
+        die "ERR: Missing parameters\nUsage: $0 <package_name>"
+    fi
+
+    # global pkg_name
+    pkg_name="$1"
+    trap cleanup ERR
+
+    if [[ -d "$pkg_name" ]]; then
+        die "ERR: Package already exists" # will do more error checking later
+    fi
+
+    # create package
+    create_pkg
+    echo "Package $pkg_name created successfully"
+}
+
+# Call main and pass in all command-line args
+main "$@"
