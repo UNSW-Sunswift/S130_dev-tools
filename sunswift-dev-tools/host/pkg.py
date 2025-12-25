@@ -31,31 +31,71 @@
 import argparse
 import sys
 import re
+import shutil
 import json
+from datetime import datetime
 from pathlib import Path
 
 cwd = Path.cwd()
 
-def pkg_create(pkg_name: str) -> bool:
+### CORE LOGIC ==================================================================================
+
+def pkg_create(pkg_name: str) -> None:
     """Creates directory based on structure in top comment if it doesn't already exist
+    Also registers it to node_registry.json
+    
     Args:
         pkg_name (str): pkg_name passed in from CL args
-    Returns:
-        bool: If pkg_creation was successful
     """
+    pkg_path = cwd / pkg_name
     nested_dirs = ["src", "include", "config", "launch", "logs"]
     files = ["CMakelists.txt", "README.md"]
-    new_pkg_path = cwd / pkg_name
+    
+    # TODO: Check if package already exists in cwd
+    
+    # TODO: Check if it already exists in node_registry.json somewhere else
     
     for dir in nested_dirs:
-        (new_pkg_path / dir).mkdir(parents=True)
-        
+        (pkg_path / dir).mkdir(parents=True)
     for file in files:
-        (new_pkg_path / file).touch()
+        (pkg_path / file).touch()
+        
+    # TODO: Register this package in node_registry.json
+    print("Package: create success")
+    print(f"Package: {pkg_name} created at {pkg_path}")
 
-    return True
+
+def pkg_delete(pkg_name: str) -> None:
+    """Deletes directory with pkg_name if it's in the CWD, and it's a Sunswift DDS pkg
+    Also unregisters it from node_registry.json
+     
+    Args:
+        pkg_name (str): pkg_name passed in from CL args
+    """ 
+    pkg_path = cwd / pkg_name
     
-
+    if not (pkg_path.exists() and pkg_path.is_dir()):
+        print(f"Package with name: '{pkg_name}' not found in current directory")
+        sys.exit(1)
+    
+    # TODO check if it is a valid Sunswift DDS package from node_registry
+    
+    stats = pkg_path.stat()
+    print(f"Found Sunswift DDS package: {pkg_name}")
+    print(f"Package size (bytes): {stats.st_size}")
+    print(f"Created: {datetime.fromtimestamp(stats.st_ctime).strftime("%Y-%m-%d %H:%M:%S")}")
+    res = input(f"Do you really want to delete {pkg_name} (y/n): ")
+    print("-----")
+    if res.lower() == "y":
+        shutil.rmtree(pkg_path)
+        print(f"Package: {pkg_name} deleted")
+        print(f"Package: {pkg_name} removed from node registry")
+    else:
+        print("Stopping delete...")
+        sys.exit(0)
+                
+    
+### MAIN =======================================================================================
 def main():
     ### Command line arguments
     parser = argparse.ArgumentParser(
@@ -81,6 +121,8 @@ def main():
     ### Logic based on flags
     if args.create:
         pkg_create(pkg_name)
+    elif args.delete:
+        pkg_delete(pkg_name)
 
 
 if __name__ == "__main__":
