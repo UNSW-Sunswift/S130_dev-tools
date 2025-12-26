@@ -33,6 +33,7 @@ import sys
 import re
 import shutil
 import json
+from typing import Optional, Tuple
 from datetime import datetime
 from pathlib import Path
 
@@ -47,6 +48,13 @@ NODE_REG_PATH = REPO_ROOT / "node_registry.json"
 def die(msg: str) -> None:
     print(msg)
     sys.exit(1)
+    
+def dir_size(path: Path) -> int:
+    return sum(
+        p.stat().st_size
+        for p in path.rglob("*")
+        if p.is_file()
+    )
 
 def fill_readme(path: Path) -> bool:
     pass
@@ -60,6 +68,55 @@ def fill_launch(path: Path) -> bool:
 def fill_config(path: Path) -> bool:
     pass
 
+def pkg_exist(pkg_name:str, abs_pkg_path: Path) -> tuple[bool, Optional[str]]:
+    # Check if package already exists in cwd
+    if abs_pkg_path.exists() and abs_pkg_path.is_dir():
+        return (True, str(abs_pkg_path.relative_to(REPO_ROOT)))
+
+    # Check if it already exists in node_registry.json somewhere else
+    data = json.loads(NODE_REG_PATH.read_text())
+    found_pkg = next((node for node in data["nodes"] if node["name"] == pkg_name), None)
+    if found_pkg:
+        return (True, found_pkg["path"])
+
+    return (False, None)
+
+def create_or_delete_entry(create: bool, pkg_name: str, abs_pkg_path: Path) -> bool:
+    """Creates or deletes node_registry entry depending on a flag.
+    ASSUMES ALL CHECKING HAS BEEN DONE BEFORE
+    Args:
+        create (bool): flag to create or del
+        pkg_name (str): raw pkg name (not path)
+        abs_pkg_path (Path): absolute path relative to fs root
+    Returns:
+        bool: if success or not
+    """
+    data = json.loads(NODE_REG_PATH.read_text())
+    if create:
+        # Add entry
+        new_entry = {
+            "name": pkg_name,
+            "type": "rti_dds",
+            "path": str(abs_pkg_path.relative_to(REPO_ROOT)),
+            "target": "qnx"
+        }
+        data["nodes"].append(new_entry)
+    else:
+        # Delete entry
+        index = next((i for i, node in enumerate(data["nodes"]) if node["name"] == pkg_name), None)
+        if index is None:
+            print("Package does not exist (failed previous checks...)")
+            return False
+        data["nodes"].pop(index)
+    
+    # Write to registry
+    try:
+        NODE_REG_PATH.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    except IOError as e:
+        print(f"An error has occured: {e}")
+        return False
+    
+    return True
 
 ### CORE LOGIC ==================================================================================
 
@@ -74,16 +131,11 @@ def pkg_create(pkg_name: str) -> None:
     nested_dirs = ["build", "src", "include", "config", "launch"]
     files = ["CMakelists.txt", "README.md"]
     
-    # Check if package already exists in cwd
-    if abs_pkg_path.exists() and abs_pkg_path.is_dir():
-        die(f"Package {pkg_name} already exists at {abs_pkg_path.relative_to(REPO_ROOT)}")
+    # Check if pkg already exists
+    res, location = pkg_exist(pkg_name, abs_pkg_path)
+    if res:
+        die(f"Package: {pkg_name} already exists at '{location}'")
 
-    # Check if it already exists in node_registry.json somewhere else
-    data = json.loads(NODE_REG_PATH.read_text())
-    found_pkg = next((node for node in data["nodes"] if node["name"] == pkg_name), None)
-    if found_pkg:
-        die(f"Package: {pkg_name} already exists at '{found_pkg["path"]}'")
-        
     # Create directories and files    
     for dir in nested_dirs:
         (abs_pkg_path / dir).mkdir(parents=True)
@@ -92,21 +144,10 @@ def pkg_create(pkg_name: str) -> None:
         
     # TODO: Populate CMakeLists.txt, README.md and create launch and config templates
 
-    # TODO: Refactor this to a function?
-    new_entry = {
-        "name": pkg_name,
-        "type": "rti_dds",
-        "path": str(abs_pkg_path.relative_to(REPO_ROOT)),
-        "target": "qnx"
-    }
-    data["nodes"].append(new_entry)
-    
-    try:
-        NODE_REG_PATH.write_text(
-                json.dumps(data, indent=2, sort_keys=True) + "\n"
-            )
-    except IOError as e:
-        print(f"An error has occuredL {e}")
+    # Create node_registry entry
+    res = create_or_delete_entry(True, pkg_name, abs_pkg_path)
+    if not res:
+        die("Error creating node registry entry\nExiting...")
 
     print("Package: create success")
     print(f"Package: '{pkg_name}' created at '{abs_pkg_path.relative_to(REPO_ROOT)}'")
@@ -122,19 +163,23 @@ def pkg_delete(pkg_name: str) -> None:
     """ 
     abs_pkg_path = CWD / pkg_name
     
-    if not (abs_pkg_path.exists() and abs_pkg_path.is_dir()):
-        die(f"Package with name: '{pkg_name}' not found in current directory")
-
-    # TODO check if it is a valid Sunswift DDS package from node_registry
+    res, location = pkg_exist(pkg_name, abs_pkg_path)
+    if not res:
+        die(f"Package: {pkg_name} not found")
     
     stats = abs_pkg_path.stat()
     print(f"Found Sunswift DDS package: {pkg_name}")
-    print(f"Package size (bytes): {stats.st_size}")
+    print(f"Package size (bytes): {dir_size(abs_pkg_path)}")
     print(f"Created: {datetime.fromtimestamp(stats.st_ctime).strftime("%Y-%m-%d %H:%M:%S")}")
     res = input(f"Do you really want to delete {pkg_name} (y/n): ")
     print("-----")
     if res.lower() == "y":
+        # TODO: MAKE THIS SAFER!
         shutil.rmtree(abs_pkg_path)
+        
+        res = create_or_delete_entry(False, pkg_name, abs_pkg_path)
+        if not res:
+            die(f"Error deleting node from registry\nExiting...")
         print(f"Package: {pkg_name} deleted")
         print(f"Package: {pkg_name} removed from node registry")
     else:
@@ -174,7 +219,7 @@ def main():
         pkg_create(pkg_name)
     elif args.delete:
         pkg_delete(pkg_name)
-
+    # TODO: find and mv flags
 
 if __name__ == "__main__":
     main()

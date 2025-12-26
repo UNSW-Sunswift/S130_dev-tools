@@ -1,22 +1,3 @@
 {
-  "nodes": [
-    {
-      "name": "prochaho",
-      "path": "sunswift-dev-tools/host/prochaho",
-      "target": "qnx",
-      "type": "rti_dds"
-    },
-    {
-      "name": "pro",
-      "path": "sunswift-dev-tools/pro",
-      "target": "qnx",
-      "type": "rti_dds"
-    },
-    {
-      "name": "prochacho",
-      "path": "sunswift-dev-tools/prochacho",
-      "target": "qnx",
-      "type": "rti_dds"
-    }
-  ]
+  "nodes": []
 }
