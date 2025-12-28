@@ -2,7 +2,7 @@
 
 ###############################################################################
 # Sunswift High Level DDS Package generator
-# Version: V1.0
+# Version: V1.1
 # Date: 24/12/2025
 # Author: Ryan Wong
 #
@@ -43,6 +43,22 @@ CWD = Path.cwd()
 # THIS ASSUMES that repo root is 2 directories above this script...
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+# All of these are relative to pkg top level
+nested_dirs = {
+    "build": "build",
+    "src": "src",
+    "include": "include",
+    "config": "config",
+    "launch": "launch"
+}
+files = {
+    "metadata": "pkg_metadata.json",
+    "make": "CMakeLists.txt",
+    "readme": "README.md",
+    "config": "config/config.json",
+    "launch": "launch/launch.json"
+}
+
 @dataclass
 class PkgPaths:
     pkg_name: str
@@ -62,9 +78,43 @@ def dir_size(paths: PkgPaths) -> int:
         if p.is_file()
     )
 
-def fill_readme(path: Path) -> bool:
-    pass
+def mkdir_package(paths: PkgPaths) -> None:
+    paths.abs_pkg_path.mkdir()
+    for dir in nested_dirs.values():
+        (paths.abs_pkg_path / dir).mkdir()
+    for file in files.values():
+        (paths.abs_pkg_path / file).touch()
+        if "json" in file:
+            with (paths.abs_pkg_path / file).open("w") as json_file:
+                json_file.write("{}")
 
+def fill_readme(paths: PkgPaths) -> bool:
+    text = f"""# {paths.pkg_name} DDS Package
+
+## Description
+Briefly describe the purpose of this DDS node.
+
+## Topics Published to
+Enter topics published to below
+Topic | C++ Type | Description
+------|----------|------------
+/domain/subsystem/topic|`C++ Type`|BMS Voltage
+
+## Topics Subscribed to
+Enter topics subscribed to below
+Topic | C++ Type | Description
+------|----------|------------
+/domain/subsystem/topic|`C++ Type`|BMS Voltage
+
+## Parameters
+Under construction!
+
+## Acknowledgements
+Written by `Your name here` | `Your zID here`"""
+    with (paths.abs_pkg_path / "README.md").open("w") as file:
+        file.write(text)
+        
+# TODO: implement these when i figure out what goes in them
 def fill_cmakelists(path: Path) -> bool:
     pass
 
@@ -74,18 +124,25 @@ def fill_launch(path: Path) -> bool:
 def fill_config(path: Path) -> bool:
     pass
 
-def fill_metadata(path: Path) -> bool:
-    pass
+def fill_metadata(paths: PkgPaths) -> bool:
+    abs_meta_path = paths.abs_pkg_path / files["metadata"]
+    data = json.loads(abs_meta_path.read_text())
+    data["version"] = 1
+    data["package_name"] = paths.pkg_name
+    data["package_type"] = "dds_node" # for now i guess
+    data["target"] = "qnx"
+    data["default_launch"] = files["launch"]
+    data["default_config"] = files["config"]
+    # Make it look readable
+    abs_meta_path.write_text(json.dumps(data, indent=2) + "\n")
 
 def pkg_exist_elsewhere(paths: PkgPaths) -> tuple[bool, Optional[Path]]:
     """Recursively checks if valid package with the same name exists in the whole repository
-=    Args:
+    Args:
         paths (PkgPaths): dataclass which stores name and abs path of pkg
     Returns:
         tuple[bool, Optional[Path]]: (True/False, RELATIVE path of where it is/None)
     """
-    if paths.abs_pkg_path.exists():
-        return (True, paths.abs_pkg_path)
     
     src_path = REPO_ROOT
     for path in src_path.rglob(paths.pkg_name):
@@ -108,17 +165,21 @@ def safe_rmdir(paths: PkgPaths) -> None:
         
     if not (paths.abs_pkg_path/"pkg_metadata.json").exists():
         die("Delete: Path is not a Sunswift Package")
-    
+        
+    if paths.abs_pkg_path.is_symlink():
+        die("Delete: Path is a symlink")
+
     try:
         # Check if path is within repository 
         paths.abs_pkg_path.relative_to(REPO_ROOT)
     except ValueError:
         die("Path not within SRP8-130_EMBD_High_Level repository")
     
-    if paths.abs_pkg_path == REPO_ROOT or paths.abs_pkg_path == "/":
+    if paths.abs_pkg_path == REPO_ROOT or paths.abs_pkg_path == "/" or paths.abs_pkg_path == REPO_ROOT / "src":
         die("wtf are u doing man")
-        
+
     shutil.rmtree(paths.abs_pkg_path)
+
 
 ### CORE LOGIC ==================================================================================
 
@@ -128,28 +189,24 @@ def pkg_create(paths: PkgPaths) -> None:
     Args:
         paths (PkgPaths): dataclass which stores name and abs path of pkg
     """
-    nested_dirs = ["build", "src", "include", "config", "launch"]
-    files = ["pkg_metadata.json", "CMakeLists.txt", "README.md"]
-    
     # Check if something with same name already exists in CWD
     if paths.abs_pkg_path.exists():
         die(f"Package: {paths.pkg_name} already exists at '{paths.abs_pkg_path.relative_to(REPO_ROOT)}'")
 
     # Check if pkg exists elsehwhere in src/ (if not in cwd)
     res, location = pkg_exist_elsewhere(paths)
-    if res and (location is not None):
+    if res:
         die(f"Package: {paths.pkg_name} already exists at '{location}'")
-    
+
     # Create directories and files    
     try:
-        for dir in nested_dirs:
-            (paths.abs_pkg_path / dir).mkdir(parents=True)
-        for file in files:
-            (paths.abs_pkg_path / file).touch()
-        
-        # TODO: Populate CMakeLists.txt, README.md and create launch and config templates
+        mkdir_package(paths)
+        # TODO: Populate CMakeLists.txt, and launch and config templates
+        fill_readme(paths)
+        fill_metadata(paths)
     except Exception as e:
-        ### TODO: ROLLBACK THE DIRECTORY CREATION IF FAILS
+        if paths.abs_pkg_path.exists():
+            safe_rmdir(paths)
         die(f"Error creating package: {e}")
 
     print("Package: create success")
@@ -171,8 +228,7 @@ def pkg_delete(paths: PkgPaths) -> None:
         if res and (location is not None):
             die(f"Package: '{paths.pkg_name}' found at '{location}'. Please navigate here to delete")
         else:
-            die("Package not found in repository")
-
+            die("Package not found in repository\nYou may be trying to delete a directory which isn't a valid Sunswift Package")
 
     stats = paths.abs_pkg_path.stat()
     print(f"Found Sunswift DDS package: '{paths.pkg_name}' at '{paths.abs_pkg_path.relative_to(REPO_ROOT)}'")
@@ -182,14 +238,13 @@ def pkg_delete(paths: PkgPaths) -> None:
     print("-----")
     if res.lower() == "y":
         safe_rmdir(paths)
-        
         print(f"Package: '{paths.pkg_name}' successfully deleted")
     else:
         print("Stopping delete...")
         sys.exit(0)
          
                 
-    
+
 ### MAIN =======================================================================================
 def main():
     ### Command line arguments
