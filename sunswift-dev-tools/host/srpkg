@@ -2,7 +2,7 @@
 
 ###############################################################################
 # Sunswift High Level DDS Package generator
-# Version: V1.1
+# Version: V2.0
 # Date: 24/12/2025
 # Author: Ryan Wong
 #
@@ -214,7 +214,6 @@ def pkg_create(paths: PkgPaths) -> None:
     print("Package: create success")
     print(f"Package: '{paths.pkg_name}' created at '{paths.abs_pkg_path.relative_to(REPO_ROOT)}'")
 
-
 def pkg_delete(paths: PkgPaths) -> None:
     """Deletes directory with paths.pkg_name if it's in the cwd, and it's a Sunswift DDS pkg
     
@@ -245,7 +244,6 @@ def pkg_delete(paths: PkgPaths) -> None:
         print("Stopping delete...")
         sys.exit(0)
 
-
 def pkg_find(paths: PkgPaths) -> None:
     """ Finds package with given name in repository
     Args:
@@ -257,29 +255,67 @@ def pkg_find(paths: PkgPaths) -> None:
     else:
         print(f"Package: '{paths.pkg_name}' not found in repository")
 
+def pkg_rename(paths: PkgPaths, new_name: str) -> None:
+    if paths.pkg_name == new_name:
+        die("Error: Name is the same")
+
+    # Check if pkg exists in CWD and is a valid DDS package
+    if not (paths.abs_pkg_path.exists() and paths.abs_pkg_path.is_dir() and (paths.abs_pkg_path/"pkg_metadata.json").exists()):
+        print(f"Package: '{paths.pkg_name}' cannot be found in current directory")
+        print(f"Searching for package in repository...")
+        print("-----")
+        res, location = pkg_exist_elsewhere(paths)
+        if res and (location is not None):
+            die(f"Package: '{paths.pkg_name}' found at '{location}'. Please navigate here to rename")
+        die(f"Package: '{paths.pkg_name}' not found")
+
+    res = input(f"Do you want to rename '{paths.pkg_name}' to '{new_name}'? (y/n): ")
+    if res.lower() == "y":
+        try:
+            # Update metadata file in atomic way
+            abs_old_metadata = (paths.abs_pkg_path / files["metadata"])
+            abs_new_metadata = (paths.abs_pkg_path / ("new_" + files["metadata"]))
+            
+            data = json.loads(abs_old_metadata.read_text())
+            data["package_name"] = new_name
+            abs_new_metadata.write_text(json.dumps(data, indent=2) + "\n")
+            abs_new_metadata.replace(abs_old_metadata)
+            
+            # Update package name
+            paths.abs_pkg_path.rename(paths.abs_pkg_path.parent / new_name)
+        except Exception as e:
+            if abs_new_metadata.exists():
+                abs_new_metadata.unlink()
+            die(f"Failed to update metadata: {e}")
+    else:
+        die("Stopping rename...")
+    
+    print(f"Successfully renamed '{paths.pkg_name}' to '{new_name}'")
+
 
 ### MAIN =======================================================================================
 def main():
     ### Command line arguments
     parser = argparse.ArgumentParser(
-            description="Sunswift DDS package management tool. \
-            To create and delete packages, you must be in the same directory as the package"
+            description=f"Sunswift DDS package management tool. \
+            To create, delete and rename packages, you must be in the same directory as the package."
         )
     group = parser.add_mutually_exclusive_group(required=True)
 
-    parser.add_argument("pkg_name", help="Name of package to be created/deleted")
+    parser.add_argument("pkg_name", help="Name of package to be created/deleted/found/renamed")
     group.add_argument("-c", "--create", action="store_true", help="Create specified package")
     group.add_argument("-d", "--delete", action="store_true", help="Remove specified package")
     group.add_argument("-f", "--find", action="store_true", help="Find specified package")
+    group.add_argument("-r", "--rename", metavar="new_name", help="Rename specified package")
     args = parser.parse_args()
-        
+
     pkg_name = args.pkg_name
-    
+
     ### Validate package name
     pattern = r"^[a-z0-9_]*$"
     if not re.match(pattern, pkg_name):
         die("Invalid package name: must be in 'snake_case'")
-    
+
     # Make paths objects
     abs_pkg_path = CWD / pkg_name
     paths = PkgPaths(pkg_name, abs_pkg_path)
@@ -295,7 +331,7 @@ def main():
         CWD.relative_to(REPO_ROOT/"src")
     except ValueError:
         args.create and print("Warning: Packages should be created only in src/")
-    
+
     ### Logic based on flags
     if args.create:
         pkg_create(paths)
@@ -303,7 +339,8 @@ def main():
         pkg_delete(paths)
     elif args.find:
         pkg_find(paths)
-    # TODO: find and mv flags
+    elif args.rename:
+        pkg_rename(paths, args.rename)
 
 if __name__ == "__main__":
     main()
