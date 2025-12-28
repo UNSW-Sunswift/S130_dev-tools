@@ -138,6 +138,7 @@ def fill_metadata(paths: PkgPaths) -> bool:
 
 def pkg_exist_elsewhere(paths: PkgPaths) -> tuple[bool, Optional[Path]]:
     """Recursively checks if valid package with the same name exists in the whole repository
+    
     Args:
         paths (PkgPaths): dataclass which stores name and abs path of pkg
     Returns:
@@ -154,6 +155,7 @@ def pkg_exist_elsewhere(paths: PkgPaths) -> tuple[bool, Optional[Path]]:
 def safe_rmdir(paths: PkgPaths) -> None:
     """Absolutely every error check again just to confirm before deletion. 
     In case any bugs in error checking happen before. Then deletes
+        
     Args:
         paths (PkgPaths): dataclass which stores name and abs path of pkg
     """
@@ -185,7 +187,7 @@ def safe_rmdir(paths: PkgPaths) -> None:
 
 def pkg_create(paths: PkgPaths) -> None:
     """Creates directory based on structure in top comment if it doesn't already exist.
-        
+    
     Args:
         paths (PkgPaths): dataclass which stores name and abs path of pkg
     """
@@ -215,7 +217,7 @@ def pkg_create(paths: PkgPaths) -> None:
 
 def pkg_delete(paths: PkgPaths) -> None:
     """Deletes directory with paths.pkg_name if it's in the cwd, and it's a Sunswift DDS pkg
-     
+    
     Args:
         paths (PkgPaths): dataclass which stores name and abs path of pkg
     """     
@@ -242,8 +244,19 @@ def pkg_delete(paths: PkgPaths) -> None:
     else:
         print("Stopping delete...")
         sys.exit(0)
-         
-                
+
+
+def pkg_find(paths: PkgPaths) -> None:
+    """ Finds package with given name in repository
+    Args:
+        paths (PkgPaths): _description_
+    """
+    res, location = pkg_exist_elsewhere(paths)
+    if res and (location is not None):
+        print(f"Package: '{paths.pkg_name}' found at '{location}'")
+    else:
+        print(f"Package: '{paths.pkg_name}' not found in repository")
+
 
 ### MAIN =======================================================================================
 def main():
@@ -288,6 +301,8 @@ def main():
         pkg_create(paths)
     elif args.delete:
         pkg_delete(paths)
+    elif args.find:
+        pkg_find(paths)
     # TODO: find and mv flags
 
 if __name__ == "__main__":
