@@ -17,19 +17,53 @@ import argparse
 import sys
 import subprocess
 import time
+import shutil
 from typing import Optional
 from pathlib import Path
 
 CWD = Path.cwd()
 # THIS ASSUMES that repo root is 2 directories above this script...
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if not (REPO_ROOT/"src").exists() and not (REPO_ROOT/"core").exists():
+    print(f"Error: {__file__} not 2 below repo root")
 
 ### HELPERS =======================================================================================
 def die(msg: str) -> None:
     """Kills script and prints out msg"""
     print(msg)
     sys.exit(1)
+
+def safe_rmdir(path: Path) -> bool:
+    """Absolutely every error check again just to confirm before deletion. 
+    In case any bugs in error checking happen before. Then deletes specified dir
+    Args:
+        path (Path): path of dir to be deleted
+    """
+    if not path.exists():
+        print("Clean: Path does not exist")
+        return False
+        
+    if not path.is_dir():
+        print("Clean: Path is not a directory")
+        return False
+        
+    if path.is_symlink():
+        print("Clean: Path is a symlink")
+        return False
+
+    try:
+        # Check if path is within repository 
+        path.relative_to(REPO_ROOT)
+    except ValueError:
+        print("Path not within SRP8-130_EMBD_High_Level repository")
+        return False
     
+    if path == REPO_ROOT or path == "/" or path == REPO_ROOT / "src" or path == REPO_ROOT / "core":
+        die("wtf are u doing man")
+
+    shutil.rmtree(path)
+    return True
+
 def build(targets: Optional[list[str]], all: bool, cores: int) -> None:
     """Creates root /build if it doesn't exist. Then builds passed in targets, 
     OR builds all targets using "cores" number of jobs
@@ -80,8 +114,29 @@ def build(targets: Optional[list[str]], all: bool, cores: int) -> None:
                 ], check=True)
     except subprocess.CalledProcessError as e:
         die(f"Build: Error building targets: {e}")
+    print("=============== Build Complete =================")
     end_time = time.time()
-    print(f"\nBuild finished in {end_time-start_time:.4f} seconds")
+    print(f"Build finished in {end_time-start_time:.4f} seconds")
+    
+    
+def clean() -> None:
+    """Deletes bin/, build/, and lib/ from repo root."""
+    print("============= Cleaning Targets ===============")
+    res = input("Would you like to remove /bin /lib and /build from repository root? (y/n): ")
+    if res.lower() != "y":
+        die("Cancelling clean..")
+
+    for dir_name in ["build", "lib", "bin"]:
+        dir_path = REPO_ROOT / dir_name
+        if dir_path.exists():
+            print(f"Clean: Removing {dir_name} directory: {dir_path}")
+            ret = safe_rmdir(dir_path)
+            if ret: print(f"Clean: {dir_name} removed successfully.")
+        else:
+            print(f"Clean: {dir_name} does not exist, skipping.")
+
+    print("============== Clean Complete ================")
+
 
 ### MAIN ==========================================================================================
 
@@ -109,7 +164,7 @@ def main():
     if args.target or all_bool:
         build(args.target, all_bool, args.jobs)
     elif args.clean:
-        print("cleaning wip")
+        clean()
 
 if __name__ == "__main__":
     main()
