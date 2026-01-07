@@ -15,10 +15,9 @@
 
 import argparse
 import sys
-import re
-import shutil
 import subprocess
-from typing import Optional, Tuple
+import time
+from typing import Optional
 from pathlib import Path
 
 CWD = Path.cwd()
@@ -27,36 +26,52 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 ### HELPERS =======================================================================================
 def die(msg: str) -> None:
+    """Kills script and prints out msg"""
     print(msg)
     sys.exit(1)
     
-def build(targets: Optional[list[str]], all: bool, cores: int):
+def build(targets: Optional[list[str]], all: bool, cores: int) -> None:
+    """Creates root /build if it doesn't exist. Then builds passed in targets, 
+    OR builds all targets using "cores" number of jobs
+
+    Args:
+        targets (Optional[list[str]]): list of target names to build
+        all (bool): whether to build all or not
+        cores (int): number of jobs to run in parallel
+    """
     # Always Initialise CMake in /build
     build_dir_path = REPO_ROOT/"build"
     cmakelists_path = REPO_ROOT/"CMakeLists.txt"
     num_cores = f"-j{cores}"
     
+    print("============ CMake Initialisation ============")
     # CMakeLists.txt at root MUST exist. Makes build dir if does not exist
     if not (cmakelists_path.exists() and cmakelists_path.is_file()):
         die("Build: Root CMakeLists.txt does not exist")
     if not (build_dir_path.exists() and build_dir_path.is_dir()):
+        print("Build: root build directory not found, creating build/")
         build_dir_path.mkdir()
 
+    start_time = time.time()
     # Re-init cmake
     try:
+        print("Build: Initialising CMake")
         subprocess.run([
             "cmake", "-S", str(REPO_ROOT), "-B", str(build_dir_path),
         ], check=True)
     except subprocess.CalledProcessError as e:
         die(f"Build: Error initialising CMake: {e}")
 
+    print("============= Building Targets ===============")
     # Build targets
     try:
         if all:
+            print("Build: Building all targets")
             subprocess.run([
                 "cmake", "--build", str(build_dir_path), "--", num_cores
             ], check=True)
         elif targets is not None:
+            print("Build: Building specified targets")
             # Uhh loop is probably less efficient, but the alternative is messy
             # If someone is using --target, build times probably tiny anyway
             for target in targets:
@@ -65,6 +80,8 @@ def build(targets: Optional[list[str]], all: bool, cores: int):
                 ], check=True)
     except subprocess.CalledProcessError as e:
         die(f"Build: Error building targets: {e}")
+    end_time = time.time()
+    print(f"\nBuild finished in {end_time-start_time:.4f} seconds")
 
 ### MAIN ==========================================================================================
 
@@ -87,9 +104,12 @@ def main():
     if args.command == "all" and (args.target or args.clean):
         die("Command: 'all' cannot be called with --target or --clean")
     
-    ### Invoke build
+    ### Handle option
     all_bool = args.command == "all"
-    build(args.target, all_bool, args.jobs)
+    if args.target or all_bool:
+        build(args.target, all_bool, args.jobs)
+    elif args.clean:
+        print("cleaning wip")
 
 if __name__ == "__main__":
     main()
