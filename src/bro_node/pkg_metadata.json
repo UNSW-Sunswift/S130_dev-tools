@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "package_name": "bro_node",
+  "package_type": "dds_node",
+  "target": "qnx",
+  "default_launch": "launch/launch.json",
+  "default_config": "config/config.json"
+}
