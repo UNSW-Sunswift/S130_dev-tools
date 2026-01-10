@@ -30,6 +30,8 @@
 #   - srpkg type list
 ###############################################################################
 
+# TODO: implement creating type stuff, implement node info implement node and type list
+
 import argparse
 import sys
 import re
@@ -61,6 +63,7 @@ FILES = {
     "make": "CMakeLists.txt",
     "readme": "README.md",
     "param": "param/param.json",
+    "main": "src/main.cpp"
 }
 
 CLI_ARGS = {
@@ -133,11 +136,22 @@ Written by `Your name here` | `Your zID here`"""
     with (paths.abs_pkg_path / FILES["readme"]).open("w") as file:
         file.write(text)
         
-# TODO: implement these when i figure out what goes in them
-def fill_cmakelists(path: Path) -> None:
-    pass
+def fill_cmakelists(paths: PkgPaths) -> None:
+    text = f"""set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${{CMAKE_SOURCE_DIR}}/deploy/bin) 
+add_executable({paths.pkg_name} src/main.cpp <add more source files here>)
 
-def fill_param(path: Path) -> None:
+SET (LIBS 
+    dds_node
+    <add your type libraries here>
+    <add other dependencies here>
+)
+
+target_include_directories({paths.pkg_name} PRIVATE include)
+target_link_libraries({paths.pkg_name} PRIVATE ${{LIBS}})"""
+    with (paths.abs_pkg_path / FILES["make"]).open("w") as file:
+        file.write(text)
+
+def fill_param(paths: PkgPaths) -> None:
     pass
 
 def fill_metadata(paths: PkgPaths) -> None:
@@ -252,6 +266,7 @@ def pkg_create(paths: PkgPaths) -> None:
         mkdir_package(paths)
         # TODO: Populate CMakeLists.txt, and launch and config templates
         fill_readme(paths)
+        fill_cmakelists(paths)
         fill_metadata(paths)
     except Exception as e:
         if paths.abs_pkg_path.exists():
