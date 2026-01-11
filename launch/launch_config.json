@@ -1,10 +1,10 @@
 {
     "bro_node": {
-        "binary": "deploy/bin/bro_node",
-        "param": "deploy/param/bro_node_param.json"
+        "binary": "bin/bro_node",
+        "param": "param/bro_node_param.json"
     },
     "funny_node": {
-        "binary": "deploy/bin/funny_node",
-        "param": "deploy/param/funny_node_param.json"
+        "binary": "bin/funny_node",
+        "param": "param/funny_node_param.json"
     }
 }

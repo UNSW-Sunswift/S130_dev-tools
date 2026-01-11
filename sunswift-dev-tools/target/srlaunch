@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+
+###############################################################################
+# Sunswift High Level dds executable launcher
+# Version: V0.1
+# Date: 11/01/2026
+# Author: Ryan Wong
+#
+# Node orchestrator which launches all executables according to a root json launch file
+# This script shall live in deploy/ when build is staged, 
+# and it also resolves paths RELATIVE TO deploy/
+# 
+# Usage:
+###############################################################################
+
+import json
+import subprocess
+import sys
+from argparse import ArgumentParser
+from pathlib import Path
+from typing import Dict, Any
+
+# This assumes srlaunch.py is in deploy/
+DEPLOY_ROOT = Path(__file__).resolve().parents[0]
+# if not (DEPLOY_ROOT/"bin").exists() and not (DEPLOY_ROOT/"param").exists():
+#     print(f"Error: {__file__} not in deploy/")
+    
+"""
+TODO:
+1. Take in the launch file path as a command line argument
+2. find each binary and start it
+"""
+def die(msg: str):
+    print(msg)
+    sys.exit(1)
+
+def launch(launch_path: Path):
+    data = {}
+    try:
+        with launch_path.open("r") as launch:
+            data = json.load(launch)
+    except Exception as e:
+        die(f"Failed to parse launch file: {e}")
+    
+    for node, vals in data.items():
+        print(f"Starting node: {node}")
+        bin_path = DEPLOY_ROOT / Path(vals["binary"])
+        if not bin_path.exists():
+            print(f"Node: {node} with binary: {vals["binary"]} cannot be found")
+            continue
+        subprocess.Popen(bin_path)
+        
+
+def main():
+    parser = ArgumentParser()
+    parser.add_argument("launch_config_path", help="")
+    args = parser.parse_args()
+    
+    launch_path = DEPLOY_ROOT / Path(args.launch_config_path)
+    # if not launch_path.exists():
+    #     die(f"Error: cannot find launch file at '{launch_path}'")
+        
+    launch(launch_path)
+
+if __name__ == "__main__":
+    main()
