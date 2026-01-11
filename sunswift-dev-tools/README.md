@@ -131,7 +131,9 @@ srbuild -t package1 -j 16
    srbuild --all
    ```
 
-5. Run the executable (from repo root):
+5. Add the binary and config locations (in deploy/) to `launch/launch_config.json`
+
+6. Run the executable (from repo root):
    ```bash
    ./deploy/bin/my_dds_node
    ```

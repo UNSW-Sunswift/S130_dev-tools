@@ -11,7 +11,7 @@
 # ONLY allowed to be used within the SRP8-130 high level embedded repository
 # 
 # Usage:
-#   - srbuild all
+#   - srbuild --all
 #   - srbuild --target/-t node1 node2 lib1...
 #   - srbuild --clean
 ###############################################################################

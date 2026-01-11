@@ -58,7 +58,7 @@ FILES = {
     "metadata": ".srpkg",
     "make": "CMakeLists.txt",
     "readme": "README.md",
-    "param": "param/param.json",
+    "param": "param/{pkg_name}_param.json",
     "main": "src/main.cpp"
 }
 
@@ -222,9 +222,12 @@ def mkdir_package(paths: PkgPaths) -> None:
     for dir in NESTED_DIRS.values():
         (paths.abs_pkg_path / dir).mkdir()
     for file in FILES.values():
-        (paths.abs_pkg_path / file).touch()
-        if "json" in file:
-            with (paths.abs_pkg_path / file).open("w") as json_file:
+        new_file = file
+        if "{pkg_name}" in file:
+            new_file = file.format(pkg_name=paths.pkg_name)
+        (paths.abs_pkg_path / new_file).touch()
+        if "json" in new_file:
+            with (paths.abs_pkg_path / new_file).open("w") as json_file:
                 json_file.write("{}")
 
 def pkg_create(paths: PkgPaths) -> None:
@@ -273,9 +276,12 @@ def pkg_create(paths: PkgPaths) -> None:
         print(f"  {dir.ljust(max_len)}: {exists}")
     # Files
     for file_name in FILES.values():
-        file_path = paths.abs_pkg_path / file_name
+        new_file_name = file_name
+        if "{pkg_name}" in file_name:
+            new_file_name = file_name.format(pkg_name=paths.pkg_name)
+        file_path = paths.abs_pkg_path / new_file_name
         exists = "✔" if file_path.exists() else "✖"
-        print(f"  {file_name.ljust(max_len)}: {exists}")
+        print(f"  {new_file_name.ljust(max_len)}: {exists}")
 
 def pkg_info(paths: PkgPaths) -> None:
     """ Finds package with given name in repository
