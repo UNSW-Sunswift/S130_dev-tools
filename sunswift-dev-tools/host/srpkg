@@ -261,27 +261,21 @@ def pkg_create(paths: PkgPaths) -> None:
             safe_rmdir(paths)
         die(f"Error creating package: {e}")
 
-    print(f"✅ Package '{paths.pkg_name}' created successfully!")
+    print(f"Package '{paths.pkg_name}' created successfully!")
     print(f"Location: {paths.abs_pkg_path.relative_to(REPO_ROOT)}\n")
-
-    # Determine padding for nice alignment
-    all_names = list(NESTED_DIRS.values()) + list(FILES.values())
-    max_len = max(len(name) for name in all_names) + 2
 
     print("Created structure:")
     # Directories
     for dir in NESTED_DIRS.values():
         dir_path = paths.abs_pkg_path / dir
-        exists = "✔" if dir_path.exists() else "✖"
-        print(f"  {dir.ljust(max_len)}: {exists}")
+        print(f"  {dir}")
     # Files
     for file_name in FILES.values():
         new_file_name = file_name
         if "{pkg_name}" in file_name:
             new_file_name = file_name.format(pkg_name=paths.pkg_name)
         file_path = paths.abs_pkg_path / new_file_name
-        exists = "✔" if file_path.exists() else "✖"
-        print(f"  {new_file_name.ljust(max_len)}: {exists}")
+        print(f"  {new_file_name}")
 
 def pkg_info(paths: PkgPaths) -> None:
     """ Finds package with given name in repository
