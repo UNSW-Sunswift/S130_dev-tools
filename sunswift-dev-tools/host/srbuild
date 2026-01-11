@@ -2,7 +2,7 @@
 
 ###############################################################################
 # Sunswift High Level build tool
-# Version: V0.1
+# Version: V1.0
 # Date: 7/01/2026
 # Author: Ryan Wong
 #
@@ -120,16 +120,16 @@ def build(targets: Optional[list[str]], all: bool, cores: int) -> None:
     print("=============== Build Complete =================")
     end_time = time.time()
     print(f"Build finished in {end_time-start_time:.4f} seconds")
-    
-    
+
+
 def clean() -> None:
-    """Deletes bin/, build/, and lib/ from repo root."""
+    """Deletes deploy/, build/, and lib/ from repo root."""
     print("============= Cleaning Targets ===============")
-    res = input("Would you like to remove /bin /lib and /build from repository root? (y/n): ")
+    res = input("Would you like to remove /deploy /lib and /build from repository root? (y/n): ")
     if res.lower() != "y":
         die("Cancelling clean..")
 
-    for dir_name in ["build", "lib", "bin"]:
+    for dir_name in ["build", "lib", "deploy"]:
         dir_path = REPO_ROOT / dir_name
         if dir_path.exists():
             print(f"Clean: Removing {dir_name} directory: {dir_path}")
@@ -148,11 +148,11 @@ def main():
     parser = argparse.ArgumentParser(
         description="Sunswift build tool"
     )
-    group = parser.add_mutually_exclusive_group()
+    group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--target", "-t", nargs="+", help="One or more target names")
     group.add_argument("--clean", action="store_true", help="Delete /bin and /lib, re-initialise CMake")
+    group.add_argument("--all", "-a", action="store_true", help="Flag '--all/-a' to build all targets")
     parser.add_argument("--jobs", "-j", default=8, type=int, help="Number of parallel jobs Make runs. Default=8")
-    parser.add_argument("command", nargs="?", choices=["all"], help="Optional command: 'all' to build all targets")
     args = parser.parse_args()
     
     ### SANITY CHECK - immediately fail if not used within SRP8-130 High level embedded repository
@@ -161,17 +161,9 @@ def main():
     except ValueError:
         die("Error: Script must be run within repository")
     
-    ### Validate commands - it's possible NO cl args are entered
-    if not args.target and not args.clean and not args.command:
-        parser.print_help()
-        sys.exit(1)
-    if args.command == "all" and (args.target or args.clean):
-        die("Command: 'all' cannot be called with --target or --clean")
-    
     ### Handle option
-    all_bool = args.command == "all"
-    if args.target or all_bool:
-        build(args.target, all_bool, args.jobs)
+    if args.target or args.all:
+        build(args.target, args.all, args.jobs)
     elif args.clean:
         clean()
 

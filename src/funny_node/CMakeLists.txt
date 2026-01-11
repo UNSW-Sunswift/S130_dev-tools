@@ -5,6 +5,7 @@ SET (LIBS
     dds_node
     std_types
     custom_types
+    bro
 )
 
 target_include_directories(funny_node PRIVATE include)
