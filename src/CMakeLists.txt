@@ -1,2 +1,2 @@
-add_subdirectory(fake_node)
+add_subdirectory(funny_node)
 add_subdirectory(bro_node)

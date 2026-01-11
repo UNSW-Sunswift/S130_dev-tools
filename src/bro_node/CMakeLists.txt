@@ -1,5 +1,5 @@
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin) 
-add_executable(bro_node src/bro_node.cpp)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/deploy/bin) 
+add_executable(bro_node src/main.cpp)
 
 SET (LIBS 
     bro

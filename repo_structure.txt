@@ -64,5 +64,10 @@ SRP8-130_EMBD-High_level/
     - launch2.config            # perhaps different launch config to test specific subsystem or something
 - build/                        # CMake artifacts
     - blah
-- bin/
-    - domain1_node1.bin         # final binaries         
+- deploy/
+    - bin/                      # final binaries
+        - domain1_node1         
+    - log/                      # runtime log output files
+        - domain1_node1.log
+    - param/                    # startup-time files
+        - domain1_node1.json

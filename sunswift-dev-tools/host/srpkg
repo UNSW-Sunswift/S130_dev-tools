@@ -2,7 +2,7 @@
 
 ###############################################################################
 # Sunswift High Level DDS Package generator
-# Version: V2.0
+# Version: V3.0
 # Date: 24/12/2025
 # Author: Ryan Wong
 #
@@ -25,12 +25,9 @@
 #   - srpkg node create bro
 #   - srpkg node info bro
 #   - srpkg node list
-#   - srpkg type create bro_type
-#   - srpkg type info bro_type
-#   - srpkg type list
 ###############################################################################
 
-# TODO: implement creating type stuff, implement node info implement node and type list
+# TODO: implement node info and list
 
 import argparse
 import sys
@@ -59,7 +56,7 @@ NESTED_DIRS = {
     "param": "param",
 }
 FILES = {
-    "metadata": "srpkg.json",
+    "metadata": ".srpkg",
     "make": "CMakeLists.txt",
     "readme": "README.md",
     "param": "param/param.json",
@@ -67,16 +64,9 @@ FILES = {
 }
 
 CLI_ARGS = {
-    "node": {
-        "create": ["name"],
-        "info": ["name"],
-        "list": []
-    },
-    "type": {
-        "create": ["name"],
-        "info": ["name"],
-        "list": []
-    }
+    "create": ["name"],
+    "info": ["name"],
+    "list": []
 }
 
 @dataclass
@@ -92,23 +82,12 @@ def die(msg: str) -> None:
     print(msg)
     sys.exit(1)
     
-# def dir_size(paths: PkgPaths) -> int:
-#     path = paths.abs_pkg_path
-#     return sum(
-#         p.stat().st_size
-#         for p in path.rglob("*")
-#         if p.is_file()
-#     )
-
-def mkdir_package(paths: PkgPaths) -> None:
-    paths.abs_pkg_path.mkdir()
-    for dir in NESTED_DIRS.values():
-        (paths.abs_pkg_path / dir).mkdir()
-    for file in FILES.values():
-        (paths.abs_pkg_path / file).touch()
-        if "json" in file:
-            with (paths.abs_pkg_path / file).open("w") as json_file:
-                json_file.write("{}")
+def dir_size(path: Path) -> int:
+    return sum(
+        p.stat().st_size
+        for p in path.rglob("*")
+        if p.is_file()
+    )
 
 def fill_readme(paths: PkgPaths) -> None:
     text = f"""# {paths.pkg_name} DDS Package
@@ -151,15 +130,9 @@ target_link_libraries({paths.pkg_name} PRIVATE ${{LIBS}})"""
     with (paths.abs_pkg_path / FILES["make"]).open("w") as file:
         file.write(text)
 
+# TODO: When we figure out static params
 def fill_param(paths: PkgPaths) -> None:
     pass
-
-def fill_metadata(paths: PkgPaths) -> None:
-    abs_meta_path = paths.abs_pkg_path / FILES["metadata"]
-    data = json.loads(abs_meta_path.read_text())
-    data["kind"] = "node"
-    # Make it look readable
-    abs_meta_path.write_text(json.dumps(data, indent=2) + "\n")
 
 def pkg_exist_elsewhere(paths: PkgPaths) -> tuple[bool, Optional[Path]]:
     """Recursively checks if valid package with the same name exists in src
@@ -188,7 +161,7 @@ def safe_rmdir(paths: PkgPaths) -> None:
     if not paths.abs_pkg_path.is_dir():
         die("Delete: Path is not a directory")
         
-    if not (paths.abs_pkg_path/"pkg_metadata.json").exists():
+    if not (paths.abs_pkg_path/FILES["metadata"]).exists():
         die("Delete: Path is not a Sunswift Package")
         
     if paths.abs_pkg_path.is_symlink():
@@ -208,7 +181,7 @@ def safe_rmdir(paths: PkgPaths) -> None:
     shutil.rmtree(paths.abs_pkg_path)
 
 def validate_name(name: str) -> PkgPaths:
-    ### Validate node/type package name
+    ### Validate node package name
     pattern = r"^[a-z0-9_]*$"
     if not re.match(pattern, name):
         die("Invalid package name: must be in 'snake_case'")
@@ -224,10 +197,10 @@ def validate_name(name: str) -> PkgPaths:
 
 def parse_args() ->argparse.Namespace:
     """
-    Constructs a 2 level parser with all arguments specified in CLI_ARGS above, 
+    Constructs a 1 level parser with all arguments specified in CLI_ARGS above, 
     then executes and returns args
     
-    You can use args.object (first level), args.obj_command (second level), then args.name for leaf arg
+    You can use args.command (first level), then args.name for leaf arg
     """
     ### Command line arguments
     root_parser = argparse.ArgumentParser(
@@ -236,22 +209,36 @@ def parse_args() ->argparse.Namespace:
     )
     # at a junction, there can be many options, where one option can be another junction
     # imagine a tree structure
-    level1_junction = root_parser.add_subparsers(dest="object", required=True)
-    for obj_name, action_dict in CLI_ARGS.items():
-        level1_option = level1_junction.add_parser(obj_name)
-        level2_junction = level1_option.add_subparsers(dest=f"{obj_name}_command", required=True)
-        for action, args in action_dict.items():
-            level2_option = level2_junction.add_parser(action)
-            for arg in args:
-                level2_option.add_argument(arg)
+    level1_junction = root_parser.add_subparsers(dest="command", required=True)
+    for command, arg_array in CLI_ARGS.items():
+        level1_option = level1_junction.add_parser(command)
+        for arg in arg_array:
+            level1_option.add_argument(arg)
     
     return root_parser.parse_args()
+
+def mkdir_package(paths: PkgPaths) -> None:
+    """Actually makes the directory structure"""
+    paths.abs_pkg_path.mkdir()
+    for dir in NESTED_DIRS.values():
+        (paths.abs_pkg_path / dir).mkdir()
+    for file in FILES.values():
+        (paths.abs_pkg_path / file).touch()
+        if "json" in file:
+            with (paths.abs_pkg_path / file).open("w") as json_file:
+                json_file.write("{}")
 
 def pkg_create(paths: PkgPaths) -> None:
     """Creates directory based on structure in top comment if it doesn't already exist.
     Args:
         paths (PkgPaths): dataclass which stores name and abs path of pkg
     """
+    # Must be created in src/
+    try:
+        CWD.relative_to(REPO_ROOT/"src")
+    except ValueError:
+        die("Error: Packages should be created only in src/")
+
     # Check if something with same name already exists in CWD
     if paths.abs_pkg_path.exists():
         die(f"Error: {paths.pkg_name} already exists at '{paths.abs_pkg_path.relative_to(REPO_ROOT)}'")
@@ -264,17 +251,32 @@ def pkg_create(paths: PkgPaths) -> None:
     # Create directories and files    
     try:
         mkdir_package(paths)
-        # TODO: Populate CMakeLists.txt, and launch and config templates
         fill_readme(paths)
         fill_cmakelists(paths)
-        fill_metadata(paths)
+        fill_param(paths)
     except Exception as e:
         if paths.abs_pkg_path.exists():
             safe_rmdir(paths)
         die(f"Error creating package: {e}")
 
-    print("Success: Package creation success")
-    print(f"Package: '{paths.pkg_name}' created at '{paths.abs_pkg_path.relative_to(REPO_ROOT)}'")
+    print(f"✅ Package '{paths.pkg_name}' created successfully!")
+    print(f"Location: {paths.abs_pkg_path.relative_to(REPO_ROOT)}\n")
+
+    # Determine padding for nice alignment
+    all_names = list(NESTED_DIRS.values()) + list(FILES.values())
+    max_len = max(len(name) for name in all_names) + 2
+
+    print("Created structure:")
+    # Directories
+    for dir in NESTED_DIRS.values():
+        dir_path = paths.abs_pkg_path / dir
+        exists = "✔" if dir_path.exists() else "✖"
+        print(f"  {dir.ljust(max_len)}: {exists}")
+    # Files
+    for file_name in FILES.values():
+        file_path = paths.abs_pkg_path / file_name
+        exists = "✔" if file_path.exists() else "✖"
+        print(f"  {file_name.ljust(max_len)}: {exists}")
 
 def pkg_info(paths: PkgPaths) -> None:
     """ Finds package with given name in repository
@@ -282,10 +284,88 @@ def pkg_info(paths: PkgPaths) -> None:
         paths (PkgPaths): _description_
     """
     res, location = pkg_exist_elsewhere(paths)
-    if res and (location is not None):
-        print(f"Package: '{paths.pkg_name}' found at '{location}'")
+
+    if not res or location is None:
+        die(f"Package: '{paths.pkg_name}' not found in src/")
+        return # pydantic shut up
+
+    print(f"=============== {paths.pkg_name} INFO ===============")
+    # get size and num things
+    abs_path = REPO_ROOT / location
+    size_bytes = dir_size(abs_path)
+    size_kb = size_bytes / 1024
+    num_files = sum(1 for thing in abs_path.rglob("*") if thing.is_file())
+    num_dirs = sum(1 for thing in abs_path.rglob("*") if thing.is_dir())
+
+    # Get last modified + creation times
+    all_files = list(abs_path.rglob("*"))
+    if all_files:
+        creation_ts = min(p.stat().st_ctime for p in all_files)
+        last_mod_ts = max(p.stat().st_mtime for p in all_files)
     else:
-        print(f"Package: '{paths.pkg_name}' not found in repository")
+        creation_ts = last_mod_ts = abs_path.stat().st_ctime
+
+    creation_date = datetime.fromtimestamp(creation_ts).strftime("%d/%m/%Y %H:%M:%S")
+    last_mod_date = datetime.fromtimestamp(last_mod_ts).strftime("%d/%m/%Y %H:%M:%S")
+
+    # Combine all names to compute max padding
+    all_names = list(NESTED_DIRS.values()) + list(FILES.values())
+    max_len = max(len(name) for name in all_names) + 2 
+
+    print(f"Package: '{paths.pkg_name}'")
+    print(f"Location: {location}")
+    print(f"Total size: {size_bytes} B ({size_kb:.2f} KB)")
+    print(f"Contents: {num_dirs} directories, {num_files} files")
+    print(f"Created: {creation_date}")
+    print(f"Last modified: {last_mod_date}")
+    
+    # List source files
+    src_dir = abs_path / "src"
+    if src_dir.exists():
+        cpp_files = sorted([f.relative_to(abs_path) for f in src_dir.rglob("*.cpp")])
+        if cpp_files:
+            print("\nSource files (.cpp):")
+            for f in cpp_files:
+                print(f"  {f}")
+
+    # List header files
+    include_dir = abs_path / "include"
+    if include_dir.exists():
+        hpp_files = sorted([f.relative_to(abs_path) for f in include_dir.rglob("*.hpp")])
+        if hpp_files:
+            print("\nHeader files (.hpp):")
+            for f in hpp_files:
+                print(f"  {f}")
+
+def pkg_list() -> None:
+    """Lists all valid DDS packages under src/. Valid means contains FILES["metadata"]"""
+    src_root = REPO_ROOT / "src"
+    if not src_root.exists():
+        die("No src/ directory found in repository.")
+
+    print(f"=============== NODE LIST ===============")
+    packages = []
+
+    # recursively search
+    for path in src_root.rglob("*"):
+        if path.is_dir() and (path / FILES["metadata"]).exists():
+            pkg_name = path.name
+            rel_path = path.relative_to(REPO_ROOT)
+            packages.append((pkg_name, rel_path))
+
+    if not packages:
+        print("No packages found in src/")
+        return
+
+    # sort by name for neatness (already sorts using first tuple element)
+    # packages.sort()
+
+    # Determine padding for alignment
+    max_name_len = max(len(name) for name, _ in packages) + 2
+
+    print(f"Found {len(packages)} package(s) in src/:\n")
+    for name, rel_path in packages:
+        print(f"  {name.ljust(max_name_len)} : {rel_path}")
 
 
 # =================================================================================================
@@ -300,42 +380,17 @@ def main():
         CWD.relative_to(REPO_ROOT)
     except ValueError:
         die("Error: Script must be run within repository")
-    
-    # Must be created in src/ if node and core/dds_types if type
-    if args.object == "node" and args.node_command == "create":
-        try:
-            CWD.relative_to(REPO_ROOT/"src")
-        except ValueError:
-            die("Error: Node packages should be created only in src/")
-    elif args.object == "type" and args.type_command == "create":
-        try:
-            CWD.relative_to(REPO_ROOT/"core/dds_types")
-        except ValueError:
-            die("Error: Type packages should be created only in core/dds_types/")
 
     ### LOGIC BASED ON FLAGS
-    if args.object == "node":
-        cmd = args.node_command
-        if cmd == "create":
-            paths = validate_name(args.name)
-            pkg_create(paths)
-        elif cmd == "info":
-            paths = validate_name(args.name)
-            pkg_info(paths)
-        elif cmd == "list":
-            # list_nodes()
-            pass
-    elif args.object == "type":
-        cmd = args.type_command
-        if cmd == "create":
-            paths = validate_name(args.name)
-            # create_type(paths)
-        elif cmd == "info":
-            paths = validate_name(args.name)
-            # pkg_info(paths)
-        elif cmd == "list":
-            # list_types()
-            pass
+    cmd = args.command
+    if cmd == "create":
+        paths = validate_name(args.name)
+        pkg_create(paths)
+    elif cmd == "info":
+        paths = validate_name(args.name)
+        pkg_info(paths)
+    elif cmd == "list":
+        pkg_list()
 
 
 if __name__ == "__main__":
