@@ -1,5 +1,3 @@
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib) 
-
 # Glob for all sources
 set(SOURCES bro.cpp)
 

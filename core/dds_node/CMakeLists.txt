@@ -1,6 +1,3 @@
-# Output path
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib) 
-
 # Add all sources here
 set(SRC_FILES 
     ${CMAKE_CURRENT_SOURCE_DIR}/dds_node.cpp

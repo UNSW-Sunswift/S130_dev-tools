@@ -1,6 +1,3 @@
-# Output path
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib) 
-
 # I hope globbing is safe
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS *.cpp)
 
