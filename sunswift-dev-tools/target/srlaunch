@@ -6,7 +6,7 @@
 # Date: 11/01/2026
 # Author: Ryan Wong
 #
-# Node orchestrator which launches all executables according to a root json launch file
+# Node orchestrator which launches all executables according to a json launch file
 # It outputs all stdout from each process to terminal, and shuts down all nodes when itself dies
 # This script shall live in deploy/ when build is staged,
 # and it also resolves paths RELATIVE TO deploy/
@@ -14,7 +14,7 @@
 # This has massive room for expansion into a full orchestrator, I'll let Seb handle that
 #
 # VERSION NOTES:
-# Probably want to pass it a param file as well as path to a log file? so during runtime, 
+# Probably want to pass processes a param file as well as path to a log file? so during runtime, 
 # nodes have 0 CWD deps
 # 
 # Usage:
@@ -45,10 +45,12 @@ is_exited:Dict[str, bool] = {}
 # HELPERS
 # =================================================================================================
 def die(msg: str):
+    """Kills script and prints out message"""
     print(msg)
     sys.exit(1)
 
 def log(msg: str, level: str):
+    """Prints log formatted"""
     print(f"[srlaunch] [{level}] {msg}")
 
 # =================================================================================================
@@ -56,6 +58,12 @@ def log(msg: str, level: str):
 # =================================================================================================
 
 def launch(launch_path: Path) -> None:
+    """Launches all nodes by opening subprocesses, 
+    keeps track of process handles in "processes" array
+
+    Args:
+        launch_path (Path): absolute path to launch file
+    """
     data = {}
     try:
         with launch_path.open("r") as launch:
@@ -77,6 +85,7 @@ def launch(launch_path: Path) -> None:
     print("====================== LOGGING ==========================")
 
 def shutdown(signum=None, frame=None):
+    """Handle ctrl-c by shutting down all active nodes"""
     print("====================== SHUTDOWN =========================")
     log("Shutting down all nodes...", "INFO")
     for node, proc in processes.items():
@@ -87,10 +96,10 @@ def shutdown(signum=None, frame=None):
                 proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 proc.kill()
-
     sys.exit(0)
 
 def one_loop() -> None:
+    """One instance of process health checking loop. Lots of room for expansion"""
     for node, proc in processes.items():
         if proc.poll() is None:
             # not shutdown
