@@ -30,7 +30,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if not (REPO_ROOT/"src").exists() and not (REPO_ROOT/"core").exists():
     print(f"Error: {__file__} not 2 below repo root")
 
-
 # =================================================================================================
 # HELPERS
 # =================================================================================================
@@ -154,18 +153,30 @@ def clean() -> None:
 # MAIN
 # =================================================================================================
 
+"""
+NEW CLI
+srbuild all 
+srbuild node node1, node2, node3
+srbuild clean -> this should delete build/ NOT deploy
+if no --build and --install flags, automatically does both
+"""
 def main():
     ### Parse command line args
     parser = argparse.ArgumentParser(
-        description="Sunswift build tool"
+        description="Sunswift build and staging tool"
     )
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--target", "-t", nargs="+", help="One or more target names")
-    group.add_argument("--clean", action="store_true", help="Delete /bin and /lib, re-initialise CMake")
-    group.add_argument("--all", "-a", action="store_true", help="Flag '--all/-a' to build all targets")
-    parser.add_argument("--jobs", "-j", default=8, type=int, help="Number of parallel jobs Make runs. Default=8")
-    args = parser.parse_args()
+
+    common_flags = argparse.ArgumentParser(add_help=False)
+    common_flags.add_argument("--build", "-b", action="store_true", help="Only build the targets, do not install")
+    common_flags.add_argument("--install", "-i", action="store_true", help="Installs already built targets, fails if not built")
     
+    level1_junction = parser.add_subparsers(dest="command", required=True)
+    command_all = level1_junction.add_parser("all", parents=[common_flags], help="Build and install all targets")
+    command_clean = level1_junction.add_parser("clean", help="Delete the build directory, but NOT deploy/")
+    command_node = level1_junction.add_parser("node", parents=[common_flags], help="Select specific nodes to build and install")
+    command_node.add_argument("targets", nargs="+", help="One or more node target names")
+    args = parser.parse_args() 
+        
     ### SANITY CHECK - immediately fail if not used within SRP8-130 High level embedded repository
     try:
         CWD.relative_to(REPO_ROOT)
@@ -173,10 +184,23 @@ def main():
         die("Error: Script must be run within repository")
     
     ### Handle option
-    if args.target or args.all:
-        build(args.target, args.all, args.jobs)
-    elif args.clean:
-        clean()
+    # if args.target or args.all:
+    #     build(args.target, args.all, args.jobs)
+    # elif args.clean:
+    #     clean()
+    if args.command == "all":
+        # if just -i then only install
+        # if just -b then only build
+        # else build and install all
+        pass
+    elif args.command == "clean":
+        # delete build/
+        pass
+    elif args.command == "node":
+        # take in args.targets, build and install all
+        print(args.install)
+        print(args.build)
 
 if __name__ == "__main__":
     main()
+    
