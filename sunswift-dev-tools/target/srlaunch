@@ -16,8 +16,8 @@
 # Probably want to pass processes a param file as well as path to a log file during startup? 
 #  
 # Usage:
-#   - srlaunch all
-#   - srlaunch target node1 node2
+#   - ./srlaunch all
+#   - ./srlaunch target node1 node2
 ###############################################################################
 
 import json
@@ -41,18 +41,18 @@ if not (DEPLOY_ROOT/"bin").exists() and not (DEPLOY_ROOT/"param").exists():
 processes:Dict[str, subprocess.Popen] = {}
 is_exited:Dict[str, bool] = {}
 
-    
+shutdown_requested = False
 # =================================================================================================
 # HELPERS
 # =================================================================================================
 def die(msg: str):
     """Kills script and prints out message"""
-    print(f"[srlaunch] [ERROR] {msg}")
+    print(f"[srlaunch] [ERROR] {msg}", flush=True)
     sys.exit(1)
 
 def log(msg: str, level: str):
     """Prints log formatted"""
-    print(f"[srlaunch] [{level}] {msg}")
+    print(f"[srlaunch] [{level}] {msg}", flush=True)
 
 # =================================================================================================
 # CORE LOGIC
@@ -66,7 +66,7 @@ def launch(targets: Optional[list]) -> None:
         targets (Optional[list]): list of target node names, or None for all
     """
     if not BIN_PATH.exists() or not BIN_PATH.is_dir():
-       die(f"Binaies directory: {BIN_PATH} not found, aborting")
+       die(f"Binaries directory: {BIN_PATH} not found, aborting")
 
     # list of Path objects
     binaries = [f for f in BIN_PATH.iterdir() if f.is_file()]
@@ -79,10 +79,14 @@ def launch(targets: Optional[list]) -> None:
             if not bin.exists():
                 log(f"Node: {name} with binary: {bin} cannot be found", "WARN")
                 continue
-
+            # Check if executable
+            if not bin.stat().st_mode & 0o111:
+                log(f"Node: {name} binary: {bin} is not executable", "WARN")
+                continue
             processes[name] = (subprocess.Popen(
-                [bin]
+                [str(bin)]
             ))
+
             is_exited[name] = False
     else:
         for name in targets:
@@ -92,31 +96,59 @@ def launch(targets: Optional[list]) -> None:
                 log(f"Node: {name} with binary: {bin} cannot be found", "WARN")
                 continue
 
-            processes[str(name)] = (subprocess.Popen(
-                [bin]
-            ))
+            # ensure we pass a string path to Popen (Path objects may behave inconsistently)
+            processes[str(name)] = subprocess.Popen([str(bin)])
             is_exited[name] = False
     if len(processes) == 0:
         die("No processes were successful in starting :(")
     print("====================== LOGGING ==========================")
 
-def shutdown(signum=None, frame=None):
-    """Handle ctrl-c by shutting down all active nodes"""
-    print("====================== SHUTDOWN =========================")
-    log("Shutting down all nodes...", "INFO")
-    for node, proc in processes.items():
-        if proc.poll() is None:
+def shutdown_nodes():
+    """
+    Gracefully terminate all active nodes.
+    Now this is interesting.. if you SIGINT this parent process, it forwards the SIGINT to child processes
+    but if you SIGTERM this parent process, it does NOT forward the SIGTERM to child
+    So technically, this shutdown procedure is only really needed for SIGTERM (and other) handling
+    """
+    print("====================== SHUTDOWN =========================", flush=True)
+
+    procs = list(processes.items())
+
+    # Phase 1: send terminate signal to all
+    for node, proc in procs:
+        # this is JUST to handle the logging nicely, otherwise it would either log all nodes, or none
+        if not is_exited[node]:
             log(f"Shutting down: {node}", "INFO")
-            proc.terminate()
+
+        try:
+            is_running = (proc.returncode is None)
+        except Exception as e:
+            log(f"Could not determine state for {node}: {e}", "WARN")
+            is_running = False
+        if is_running:
+            try:
+                proc.terminate()
+            except Exception as e:
+                log(f"Failed to terminate {node}: {e}", "ERROR")
+    # Phase 2: wait for all to exit
+    for node, proc in procs:
+        if proc.poll() is None:
             try:
                 proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
+                log(f"Force killing: {node}", "WARN")
                 proc.kill()
-    sys.exit(0)
+                proc.wait()
+
+    log("All nodes shut down cleanly", "INFO")
 
 def one_loop() -> None:
     """One instance of process health checking loop. Lots of room for expansion"""
-    for node, proc in processes.items():
+    procs = list(processes.items())
+    if shutdown_requested:
+        shutdown_nodes()
+        sys.exit(0)
+    for node, proc in procs:
         if proc.poll() is None:
             # not shutdown
             continue
@@ -128,22 +160,28 @@ def one_loop() -> None:
             log(f"Node {node} has terminated with exit code: {proc.returncode}", "WARN")
             is_exited[node] = True
     if all(is_exited.values()):
-        shutdown()
+        log("All nodes have been prematurely terminated", "WARN")
+        shutdown_nodes()
+        sys.exit(0)
 
 
 # =================================================================================================
 # MAIN
 # =================================================================================================
 # Register shutdown
-signal.signal(signal.SIGINT, shutdown)
-signal.signal(signal.SIGTERM, shutdown)
+def shutdown_handler(signum, frame):
+    global shutdown_requested
+    shutdown_requested = True
+
+signal.signal(signal.SIGINT, shutdown_handler)
+signal.signal(signal.SIGTERM, shutdown_handler)
 
 def main():
     parser = ArgumentParser()
     
     level1_junction = parser.add_subparsers(dest="command", required=True)
     command_all = level1_junction.add_parser("all", help="Launch all nodes in deploy/bin")
-    command_target = level1_junction.add_parser("target", help="Launch specfieid nodes in deploy/bin")
+    command_target = level1_junction.add_parser("target", help="Launch specified nodes in deploy/bin")
     command_target.add_argument("targets", nargs="+", help="One or more binary node names")
     args = parser.parse_args()
     

@@ -1,4 +1,4 @@
-# Sunswift Dev Tools V1.0
+# Sunswift Dev Tools V1.0.1
 
 This repository contains high-level development tools for Sunswift embedded and DDS projects. It is separated into host/ and target/. host/ contains the dev tools we are using during development time on our host machines. target/ contains scripts that should be run on the target (NVIDIA Drive THOR computer). It is intended to be a submodule in the SR-Mjolnir repository.
 
@@ -59,7 +59,7 @@ srpkg list
 
 ### 3. Using srbuild
 
-`srbuild` is a wrapper around CMake that simplifies building DDS packages and targets. It must be run from within the repository, but can be used from anywhere, not necessarily root.
+`srbuild` is a wrapper around CMake that simplifies building DDS packages and targets. It must be run from within the repository, but can be used from anywhere within, not necessarily root.
 
 #### Output:
 `srbuild` automatically creates or overwrites root level `build/` and `deploy/` directories. It builds all objects, libraries and binaries into `build/` (don't bother touching this, it's needed for CMake), then installs all runtime files into `deploy/` for easy deployment (use this).
@@ -67,9 +67,9 @@ srpkg list
 SR-Mjolnir/
 ├── build/          # CMake-required files
 ├── deploy/
-│     ├─ bin/       # Node executables
-│     ├─ param/
-│     └─ tools/     # srlaunch, srdds
+│     ├── bin/       # Node executables
+│     ├── param/
+│     └── tools/     # srlaunch, srdds
 └── ...
 ```
 #### Building all targets:
@@ -104,13 +104,14 @@ By default, `srbuild` uses 8 parallel jobs for compilation. You can customize th
 srbuild all --jobs 4
 srbuild target package1 -j 16
 ```
-## Using srlaunch
+### 4. Using srlaunch
 Run `srlaunch` from the `deploy/tools` directory only. The version in the submodule repo is for version control.
 ```bash
-srlaunch all
-srlaunch target node1 node2
+cd deploy/tools
+./srlaunch all
+./srlaunch target node1 node2
 ```
-It's that easy guys
+Then just `Ctrl-C` to shut down all nodes gracefully. It's that easy guys.
 ## Example Workflow
 
 1. Create a new DDS package:
@@ -123,7 +124,7 @@ It's that easy guys
 
 3. Fill out the template CMakeLists.txt
 
-3. Add `add_subdirectory(my_dds_node)` to src/CMakeLists.txt to enable the build
+3. Add `add_subdirectory(relative/path/to/my_dds_node)` to src/CMakeLists.txt to enable the build
 
 4. Build the package:
    ```bash
@@ -132,8 +133,13 @@ It's that easy guys
    srbuild all
    ```
 
-5. Add the binary and config locations (in deploy/) to `launch/launch_config.json`
-
+5. Launch the node:
+   ```bash
+   # in deploy/tools
+   ./srlaunch target my_dds_node
+   # OR
+   ./srlaunch all
+   ```
 ## Notes
 
 - Both tools must be run from within the SR-Mjolnir repository
