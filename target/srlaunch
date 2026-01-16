@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+
+###############################################################################
+# Sunswift High Level dds executable launcher
+# Version: V1.1
+# Date: 11/01/2026
+# Author: Ryan Wong
+#
+# Node "orchestrator" which launches all or some executables located in deploy/bin
+# It outputs all stdout/err from each process to terminal, 
+# and shuts down all nodes when itself dies
+# 
+# This has massive room for expansion into a full orchestrator, I'll let Seb handle that
+#
+# FUTURE VERSION NOTES:
+# Probably want to pass processes a param file as well as path to a log file during startup? 
+#  
+# Usage:
+#   - ./srlaunch all
+#   - ./srlaunch target node1 node2
+###############################################################################
+
+import json
+import subprocess
+import sys
+import signal
+import time
+from argparse import ArgumentParser
+from pathlib import Path
+from typing import Dict, Optional
+
+# This assumes srlaunch.py is in deploy/tools/ (it needs to know where bin is)
+DEPLOY_ROOT = Path(__file__).resolve().parents[1]
+BIN_PATH = DEPLOY_ROOT/"bin"
+
+if not (DEPLOY_ROOT/"bin").exists() and not (DEPLOY_ROOT/"param").exists():
+    print(f"Error: {__file__} not in deploy/tools directory")
+
+# Store dict of processes where key is node name as str, value is process handle
+# also store dict of state
+processes:Dict[str, subprocess.Popen] = {}
+is_exited:Dict[str, bool] = {}
+
+shutdown_requested = False
+# =================================================================================================
+# HELPERS
+# =================================================================================================
+def die(msg: str):
+    """Kills script and prints out message"""
+    print(f"[srlaunch] [ERROR] {msg}", flush=True)
+    sys.exit(1)
+
+def log(msg: str, level: str):
+    """Prints log formatted"""
+    print(f"[srlaunch] [{level}] {msg}", flush=True)
+
+# =================================================================================================
+# CORE LOGIC
+# =================================================================================================
+
+def launch(targets: Optional[list]) -> None:
+    """Launches all nodes by opening subprocesses, 
+    keeps track of process handles in "processes" array
+
+    Args:
+        targets (Optional[list]): list of target node names, or None for all
+    """
+    if not BIN_PATH.exists() or not BIN_PATH.is_dir():
+       die(f"Binaries directory: {BIN_PATH} not found, aborting")
+
+    # list of Path objects
+    binaries = [f for f in BIN_PATH.iterdir() if f.is_file()]
+
+    print("====================== STARTUP ==========================")
+    if targets is None:
+        for bin in binaries:
+            name = str(bin.relative_to(BIN_PATH))
+            log(f"Starting node: {name}", "INFO")
+            if not bin.exists():
+                log(f"Node: {name} with binary: {bin} cannot be found", "WARN")
+                continue
+            # Check if executable
+            if not bin.stat().st_mode & 0o111:
+                log(f"Node: {name} binary: {bin} is not executable", "WARN")
+                continue
+            processes[name] = (subprocess.Popen(
+                [str(bin)]
+            ))
+
+            is_exited[name] = False
+    else:
+        for name in targets:
+            bin = BIN_PATH/name
+            log(f"Starting node: {name}", "INFO")
+            if not bin.exists():
+                log(f"Node: {name} with binary: {bin} cannot be found", "WARN")
+                continue
+
+            # ensure we pass a string path to Popen (Path objects may behave inconsistently)
+            processes[str(name)] = subprocess.Popen([str(bin)])
+            is_exited[name] = False
+    if len(processes) == 0:
+        die("No processes were successful in starting :(")
+    print("====================== LOGGING ==========================")
+
+def shutdown_nodes():
+    """
+    Gracefully terminate all active nodes.
+    Now this is interesting.. if you SIGINT this parent process, it forwards the SIGINT to child processes
+    but if you SIGTERM this parent process, it does NOT forward the SIGTERM to child
+    So technically, this shutdown procedure is only really needed for SIGTERM (and other) handling
+    """
+    print("====================== SHUTDOWN =========================", flush=True)
+
+    procs = list(processes.items())
+
+    # Phase 1: send terminate signal to all
+    for node, proc in procs:
+        # this is JUST to handle the logging nicely, otherwise it would either log all nodes, or none
+        if not is_exited[node]:
+            log(f"Shutting down: {node}", "INFO")
+
+        try:
+            is_running = (proc.returncode is None)
+        except Exception as e:
+            log(f"Could not determine state for {node}: {e}", "WARN")
+            is_running = False
+        if is_running:
+            try:
+                proc.terminate()
+            except Exception as e:
+                log(f"Failed to terminate {node}: {e}", "ERROR")
+    # Phase 2: wait for all to exit
+    for node, proc in procs:
+        if proc.poll() is None:
+            try:
+                proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                log(f"Force killing: {node}", "WARN")
+                proc.kill()
+                proc.wait()
+
+    log("All nodes shut down cleanly", "INFO")
+
+def one_loop() -> None:
+    """One instance of process health checking loop. Lots of room for expansion"""
+    procs = list(processes.items())
+    if shutdown_requested:
+        shutdown_nodes()
+        sys.exit(0)
+    for node, proc in procs:
+        if proc.poll() is None:
+            # not shutdown
+            continue
+        else:
+            # NODE HAS TERMINATED
+            if is_exited[node]:
+                # node already marked as exited
+                continue
+            log(f"Node {node} has terminated with exit code: {proc.returncode}", "WARN")
+            is_exited[node] = True
+    if all(is_exited.values()):
+        log("All nodes have been prematurely terminated", "WARN")
+        shutdown_nodes()
+        sys.exit(0)
+
+
+# =================================================================================================
+# MAIN
+# =================================================================================================
+# Register shutdown
+def shutdown_handler(signum, frame):
+    global shutdown_requested
+    shutdown_requested = True
+
+signal.signal(signal.SIGINT, shutdown_handler)
+signal.signal(signal.SIGTERM, shutdown_handler)
+
+def main():
+    parser = ArgumentParser()
+    
+    level1_junction = parser.add_subparsers(dest="command", required=True)
+    command_all = level1_junction.add_parser("all", help="Launch all nodes in deploy/bin")
+    command_target = level1_junction.add_parser("target", help="Launch specified nodes in deploy/bin")
+    command_target.add_argument("targets", nargs="+", help="One or more binary node names")
+    args = parser.parse_args()
+    
+    if args.command == "all":
+        launch(None)
+    elif args.command == "target":
+        launch(args.targets)
+        
+    
+    # Check state every 100ms
+    while(True):
+        one_loop()
+        time.sleep(0.1)
+
+if __name__ == "__main__":
+    main()
