@@ -1,3 +1,0 @@
-add_subdirectory(funny_node)
-add_subdirectory(bro_node)
-add_subdirectory(test_node)

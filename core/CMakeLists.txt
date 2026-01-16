@@ -1,4 +1,0 @@
-add_subdirectory(dds_node)
-add_subdirectory(dds_types/std_types)
-add_subdirectory(dds_types/custom_types)
-add_subdirectory(dds_types/bro_types)
