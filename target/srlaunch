@@ -20,7 +20,7 @@
 #   - ./srlaunch target node1 node2
 ###############################################################################
 
-import json
+import os
 import subprocess
 import sys
 import signal
@@ -29,12 +29,11 @@ from argparse import ArgumentParser
 from pathlib import Path
 from typing import Dict, Optional
 
-# This assumes srlaunch.py is in deploy/tools/ (it needs to know where bin is)
-DEPLOY_ROOT = Path(__file__).resolve().parents[1]
-BIN_PATH = DEPLOY_ROOT/"bin"
-
-if not (DEPLOY_ROOT/"bin").exists() and not (DEPLOY_ROOT/"param").exists():
-    print(f"Error: {__file__} not in deploy/tools directory")
+CWD = Path.cwd().resolve()
+REPO_ROOT = Path()
+DEPLOY_ROOT = Path()
+BIN_PATH = Path()
+MARKER_FILE = ".sunswift-evsn"
 
 # Store dict of processes where key is node name as str, value is process handle
 # also store dict of state
@@ -53,6 +52,46 @@ def die(msg: str):
 def log(msg: str, level: str):
     """Prints log formatted"""
     print(f"[srlaunch] [{level}] {msg}", flush=True)
+
+def git_toplevel(path: Path) -> Path:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "--show-toplevel"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except FileNotFoundError:
+        die("git not found; cannot determine repository root")
+    except subprocess.CalledProcessError:
+        die("not a git repository (or any of the parent directories)")
+    root = result.stdout.strip()
+    if not root:
+        die("git returned empty repository root")
+    return Path(root).resolve()
+
+def resolve_repo_root(cli_root: Optional[str]) -> Path:
+    env_root = os.environ.get("SR_REPO_ROOT")
+    if cli_root:
+        candidate = Path(cli_root).expanduser().resolve()
+    elif env_root:
+        candidate = Path(env_root).expanduser().resolve()
+    else:
+        return git_toplevel(CWD)
+
+    if not candidate.exists() or not candidate.is_dir():
+        die("repo root does not exist or is not a directory")
+    git_root = git_toplevel(candidate)
+    if git_root != candidate:
+        die("repo root is not a git repository root")
+    return candidate
+
+def validate_repo_root(repo_root: Path) -> None:
+    if not (repo_root / "src").exists() and not (repo_root / "core").exists():
+        die("repository root missing src/ or core/")
+    if not (repo_root / MARKER_FILE).exists():
+        die(f"marker file '{MARKER_FILE}' not found in repository root")
 
 # =================================================================================================
 # CORE LOGIC
@@ -178,12 +217,26 @@ signal.signal(signal.SIGTERM, shutdown_handler)
 
 def main():
     parser = ArgumentParser()
+    parser.add_argument(
+        "--repo-root",
+        help="Path to repository root (or set SR_REPO_ROOT). Defaults to git root.",
+    )
     
     level1_junction = parser.add_subparsers(dest="command", required=True)
     command_all = level1_junction.add_parser("all", help="Launch all nodes in deploy/bin")
     command_target = level1_junction.add_parser("target", help="Launch specified nodes in deploy/bin")
     command_target.add_argument("targets", nargs="+", help="One or more binary node names")
     args = parser.parse_args()
+
+    global REPO_ROOT, DEPLOY_ROOT, BIN_PATH
+    REPO_ROOT = resolve_repo_root(args.repo_root)
+    validate_repo_root(REPO_ROOT)
+    DEPLOY_ROOT = REPO_ROOT / "deploy"
+    BIN_PATH = DEPLOY_ROOT / "bin"
+    try:
+        CWD.relative_to(REPO_ROOT)
+    except ValueError:
+        die("script must be run within repository")
     
     if args.command == "all":
         launch(None)

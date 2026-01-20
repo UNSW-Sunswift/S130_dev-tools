@@ -8,31 +8,35 @@
 #
 # Creates a new package according to this structure in the directory which you
 # run this script from
-# 
+#
 # <package_name>/
 #     .srpkg
 #     src/
 #     include/
-#     param/
+#     config/
 #     CMakeLists.txt
 #     README.md
+#     param/ (optional, only when --with-param)
 #
 # src -> all your .cpp files
 # include -> all your .hpp files
-# param -> json files (probably) for static params
-# 
+# config -> build config for OS targets
+# param -> json files (probably) for static params (optional)
+#
 # Usage in directory you want to create package in:
-#   - srpkg create <name>
+#   - srpkg create <name> [--all|--linux|--qnx] [--with-param]
 # Usage from anywhere in repository
 #   - srpkg info <name>
 #   - srpkg list
 ###############################################################################
 
 import argparse
+import os
 import sys
 import re
 import shutil
 import json
+import subprocess
 from typing import Optional
 from datetime import datetime
 from pathlib import Path
@@ -43,24 +47,24 @@ from dataclasses import dataclass
 # =================================================================================================
 
 CWD = Path.cwd().resolve()
-# THIS ASSUMES that repo root is 2 directories above this script...
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if not (REPO_ROOT/"src").exists() and not (REPO_ROOT/"core").exists():
-    print(f"Error: {__file__} not 2 below repo root")
+REPO_ROOT = Path()
+MARKER_FILE = ".sunswift-evsn"
 
 # All of these are relative to pkg top level
 NESTED_DIRS = {
     "src": "src",
     "include": "include",
-    "param": "param",
+    "config": "config",
 }
 FILES = {
     "metadata": ".srpkg",
     "make": "CMakeLists.txt",
     "readme": "README.md",
-    "param": "param/{pkg_name}_param.json",
-    "main": "src/main.cpp"
+    "config": "config/config.json",
+    "main": "src/main.cpp",
 }
+PARAM_DIR = "param"
+PARAM_FILE = "param/{pkg_name}_param.json"
 
 CLI_ARGS = {
     "create": ["name"],
@@ -80,7 +84,47 @@ class PkgPaths:
 def die(msg: str) -> None:
     print(msg)
     sys.exit(1)
-    
+
+def git_toplevel(path: Path) -> Path:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "--show-toplevel"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except FileNotFoundError:
+        die("Error: git not found; cannot determine repository root")
+    except subprocess.CalledProcessError:
+        die("Error: not a git repository (or any of the parent directories)")
+    root = result.stdout.strip()
+    if not root:
+        die("Error: git returned empty repository root")
+    return Path(root).resolve()
+
+def resolve_repo_root(cli_root: Optional[str]) -> Path:
+    env_root = os.environ.get("SR_REPO_ROOT")
+    if cli_root:
+        candidate = Path(cli_root).expanduser().resolve()
+    elif env_root:
+        candidate = Path(env_root).expanduser().resolve()
+    else:
+        return git_toplevel(CWD)
+
+    if not candidate.exists() or not candidate.is_dir():
+        die("Error: repo root does not exist or is not a directory")
+    git_root = git_toplevel(candidate)
+    if git_root != candidate:
+        die("Error: repo root is not a git repository root")
+    return candidate
+
+def validate_repo_root(repo_root: Path) -> None:
+    if not (repo_root / "src").exists() and not (repo_root / "core").exists():
+        die("Error: repository root missing src/ or core/")
+    if not (repo_root / MARKER_FILE).exists():
+        die(f"Error: marker file '{MARKER_FILE}' not found in repository root")
+
 def dir_size(path: Path) -> int:
     return sum(
         p.stat().st_size
@@ -107,23 +151,26 @@ Topic | C++ Type | Description
 /domain/subsystem/topic|`C++ Type`|BMS Voltage
 
 ## Parameters
-Under construction!
+Add runtime parameters here if you created a param JSON file.
+
+## Build Config
+See `config/config.json` for the OS build flags.
 
 ## Contributors
 Written by `Your name here` | `Your zID here`"""
     with (paths.abs_pkg_path / FILES["readme"]).open("w") as file:
         file.write(text)
-        
-def fill_cmakelists(paths: PkgPaths) -> None:
+
+def fill_cmakelists(paths: PkgPaths, create_param: bool) -> None:
     text = f"""# Per-node info
 set(TARGET_NAME {paths.pkg_name})
-set(SOURCES 
+set(SOURCES
     src/main.cpp
 )
 set(INCLUDE_DIRS
     include
 )
-set (LIBS 
+set (LIBS
     dds_node
     # add your type libraries here
     # add other dependencies here
@@ -139,7 +186,9 @@ install(
     TARGETS ${{TARGET_NAME}}
     RUNTIME DESTINATION bin
     COMPONENT ${{TARGET_NAME}}
-)
+)"""
+    if create_param:
+        text += f"""
 install(
     FILES param/${{TARGET_NAME}}_param.json
     DESTINATION param
@@ -148,9 +197,16 @@ install(
     with (paths.abs_pkg_path / FILES["make"]).open("w") as file:
         file.write(text)
 
-# TODO: When we figure out static params
+def fill_config(paths: PkgPaths, build_config: dict[str, bool]) -> None:
+    config_path = paths.abs_pkg_path / FILES["config"]
+    with config_path.open("w") as file:
+        json.dump(build_config, file, indent=2, sort_keys=True)
+        file.write("\n")
+
 def fill_param(paths: PkgPaths) -> None:
-    pass
+    param_path = paths.abs_pkg_path / PARAM_FILE.format(pkg_name=paths.pkg_name)
+    with param_path.open("w") as json_file:
+        json_file.write("{}")
 
 def pkg_exist_elsewhere(paths: PkgPaths) -> tuple[bool, Optional[Path]]:
     """Recursively checks if valid package with the same name exists in src
@@ -159,7 +215,7 @@ def pkg_exist_elsewhere(paths: PkgPaths) -> tuple[bool, Optional[Path]]:
     Returns:
         tuple[bool, Optional[Path]]: (True/False, RELATIVE path of where it is/None)
     """
-    
+
     src_path = REPO_ROOT / "src"
     for path in src_path.rglob(paths.pkg_name):
         if path.is_dir() and (path/FILES["metadata"]).exists():
@@ -168,31 +224,31 @@ def pkg_exist_elsewhere(paths: PkgPaths) -> tuple[bool, Optional[Path]]:
     return (False, None)
 
 def safe_rmdir(paths: PkgPaths) -> None:
-    """Absolutely every error check again just to confirm before deletion. 
+    """Absolutely every error check again just to confirm before deletion.
     In case any bugs in error checking happen before. Then deletes
     Args:
         paths (PkgPaths): dataclass which stores name and abs path of pkg
     """
     if not paths.abs_pkg_path.exists():
         die("Delete: Path does not exist")
-        
+
     if not paths.abs_pkg_path.is_dir():
         die("Delete: Path is not a directory")
-        
+
     if not (paths.abs_pkg_path/FILES["metadata"]).exists():
         die("Delete: Path is not a Sunswift Package")
-        
+
     if paths.abs_pkg_path.is_symlink():
         die("Delete: Path is a symlink")
 
     try:
-        # Check if path is within repository 
+        # Check if path is within repository
         paths.abs_pkg_path.relative_to(REPO_ROOT)
     except ValueError:
         die("Path not within SRP8-130_EMBD_High_Level repository")
-    
-    if (paths.abs_pkg_path == REPO_ROOT or 
-        paths.abs_pkg_path == "/" or 
+
+    if (paths.abs_pkg_path == REPO_ROOT or
+        paths.abs_pkg_path == "/" or
         paths.abs_pkg_path == REPO_ROOT / "src"):
         die("wtf are u doing man")
 
@@ -215,15 +271,19 @@ def validate_name(name: str) -> PkgPaths:
 
 def parse_args() ->argparse.Namespace:
     """
-    Constructs a 1 level parser with all arguments specified in CLI_ARGS above, 
+    Constructs a 1 level parser with all arguments specified in CLI_ARGS above,
     then executes and returns args
-    
+
     You can use args.command (first level), then args.name for leaf arg
     """
     ### Command line arguments
     root_parser = argparse.ArgumentParser(
         description=f"Sunswift DDS package management tool. \
         Packages are created in your current working directory."
+    )
+    root_parser.add_argument(
+        "--repo-root",
+        help="Path to repository root (or set SR_REPO_ROOT). Defaults to git root.",
     )
     # at a junction, there can be many options, where one option can be another junction
     # imagine a tree structure
@@ -232,24 +292,55 @@ def parse_args() ->argparse.Namespace:
         level1_option = level1_junction.add_parser(command)
         for arg in arg_array:
             level1_option.add_argument(arg)
-    
+        if command == "create":
+            build_group = level1_option.add_mutually_exclusive_group()
+            build_group.add_argument(
+                "--all",
+                action="store_true",
+                help="Enable linux and qnx builds",
+            )
+            build_group.add_argument(
+                "--linux",
+                action="store_true",
+                help="Enable linux build only",
+            )
+            build_group.add_argument(
+                "--qnx",
+                action="store_true",
+                help="Enable qnx build only",
+            )
+            level1_option.add_argument(
+                "--with-param",
+                action="store_true",
+                help="Create an optional param JSON file",
+            )
+
     return root_parser.parse_args()
 
-def mkdir_package(paths: PkgPaths) -> None:
+def mkdir_package(paths: PkgPaths, create_param: bool) -> tuple[list[str], list[str]]:
     """Actually makes the directory structure"""
+    created_dirs = []
+    created_files = []
     paths.abs_pkg_path.mkdir()
     for dir in NESTED_DIRS.values():
         (paths.abs_pkg_path / dir).mkdir()
-    for file in FILES.values():
-        new_file = file
-        if "{pkg_name}" in file:
-            new_file = file.format(pkg_name=paths.pkg_name)
-        (paths.abs_pkg_path / new_file).touch()
-        if "json" in new_file:
-            with (paths.abs_pkg_path / new_file).open("w") as json_file:
-                json_file.write("{}")
+        created_dirs.append(dir)
+    if create_param:
+        (paths.abs_pkg_path / PARAM_DIR).mkdir()
+        created_dirs.append(PARAM_DIR)
 
-def pkg_create(paths: PkgPaths) -> None:
+    for file in FILES.values():
+        new_file = file.format(pkg_name=paths.pkg_name)
+        (paths.abs_pkg_path / new_file).touch()
+        created_files.append(new_file)
+    if create_param:
+        param_file = PARAM_FILE.format(pkg_name=paths.pkg_name)
+        (paths.abs_pkg_path / param_file).touch()
+        created_files.append(param_file)
+
+    return created_dirs, created_files
+
+def pkg_create(paths: PkgPaths, build_config: dict[str, bool], create_param: bool) -> None:
     """Creates directory based on structure in top comment if it doesn't already exist.
     Args:
         paths (PkgPaths): dataclass which stores name and abs path of pkg
@@ -269,12 +360,14 @@ def pkg_create(paths: PkgPaths) -> None:
     if res:
         die(f"Error: {paths.pkg_name} already exists at '{location}'")
 
-    # Create directories and files    
+    # Create directories and files
     try:
-        mkdir_package(paths)
+        created_dirs, created_files = mkdir_package(paths, create_param)
         fill_readme(paths)
-        fill_cmakelists(paths)
-        fill_param(paths)
+        fill_cmakelists(paths, create_param)
+        fill_config(paths, build_config)
+        if create_param:
+            fill_param(paths)
     except Exception as e:
         if paths.abs_pkg_path.exists():
             safe_rmdir(paths)
@@ -285,16 +378,11 @@ def pkg_create(paths: PkgPaths) -> None:
 
     print("Created structure:")
     # Directories
-    for dir in NESTED_DIRS.values():
-        dir_path = paths.abs_pkg_path / dir
+    for dir in created_dirs:
         print(f"  {dir}")
     # Files
-    for file_name in FILES.values():
-        new_file_name = file_name
-        if "{pkg_name}" in file_name:
-            new_file_name = file_name.format(pkg_name=paths.pkg_name)
-        file_path = paths.abs_pkg_path / new_file_name
-        print(f"  {new_file_name}")
+    for file_name in created_files:
+        print(f"  {file_name}")
 
 def pkg_info(paths: PkgPaths) -> None:
     """ Finds package with given name in repository
@@ -328,7 +416,7 @@ def pkg_info(paths: PkgPaths) -> None:
 
     # Combine all names to compute max padding
     all_names = list(NESTED_DIRS.values()) + list(FILES.values())
-    max_len = max(len(name) for name in all_names) + 2 
+    max_len = max(len(name) for name in all_names) + 2
 
     print(f"Package: '{paths.pkg_name}'")
     print(f"Location: {location}")
@@ -336,7 +424,7 @@ def pkg_info(paths: PkgPaths) -> None:
     print(f"Contents: {num_dirs} directories, {num_files} files")
     print(f"Created: {creation_date}")
     print(f"Last modified: {last_mod_date}")
-    
+
     # List source files
     src_dir = abs_path / "src"
     if src_dir.exists():
@@ -393,7 +481,10 @@ def main():
     args = parse_args()
 
     ### SANITY CHECK:
-    # Wheck that script is run in repo
+    # Check that script is run in repo
+    global REPO_ROOT
+    REPO_ROOT = resolve_repo_root(args.repo_root)
+    validate_repo_root(REPO_ROOT)
     try:
         CWD.relative_to(REPO_ROOT)
     except ValueError:
@@ -403,7 +494,14 @@ def main():
     cmd = args.command
     if cmd == "create":
         paths = validate_name(args.name)
-        pkg_create(paths)
+        build_config = {"linux": True, "qnx": False}
+        if args.all:
+            build_config = {"linux": True, "qnx": True}
+        elif args.qnx:
+            build_config = {"linux": False, "qnx": True}
+        elif args.linux:
+            build_config = {"linux": True, "qnx": False}
+        pkg_create(paths, build_config, args.with_param)
     elif cmd == "info":
         paths = validate_name(args.name)
         pkg_info(paths)
