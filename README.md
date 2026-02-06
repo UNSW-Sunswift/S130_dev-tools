@@ -5,8 +5,8 @@ This repository contains high-level development tools for Sunswift embedded and 
 
 It includes:
 
-- `srpkg`: DDS package creation and management tool  
-- `srbuild`: Build tool for compiling and deploying DDS packages  
+- `srpkg`: DDS package creation and management tool
+- `srbuild`: Build tool for compiling and deploying DDS packages
 - `srlaunch`: Tool for starting nodes
 - `srdds`: (WORK IN PROGRESS) Tool for managing active nodes
 
@@ -150,3 +150,4 @@ Then just `Ctrl-C` to shut down all nodes gracefully. It's that easy guys.
 
 ## Contributors
 Ryan Wong || z5417983
+Henry Jiang || z5416365
