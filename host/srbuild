@@ -16,7 +16,6 @@
 ###############################################################################
 
 import argparse
-import os
 import sys
 import subprocess
 import time
@@ -24,12 +23,15 @@ import shutil
 from typing import Optional
 from pathlib import Path
 
-CWD = Path.cwd().resolve()
-REPO_ROOT = Path()
-BUILD_DIR_PATH = Path()
-CMAKELISTS_PATH = Path()
-INSTALL_PREFIX = Path()
-MARKER_FILE = ".sunswift-evsn"
+CWD = Path.cwd()
+# THIS ASSUMES that repo root is 2 directories above this script...
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if not (REPO_ROOT/"src").exists() and not (REPO_ROOT/"core").exists():
+    print(f"Error: {__file__} not 2 below repo root")
+
+BUILD_DIR_PATH = REPO_ROOT/"build"
+CMAKELISTS_PATH = REPO_ROOT/"CMakeLists.txt"
+INSTALL_PREFIX = REPO_ROOT/"deploy"
 
 # =================================================================================================
 # HELPERS
@@ -39,46 +41,6 @@ def die(msg: str) -> None:
     """Kills script and prints out msg"""
     print(msg)
     sys.exit(1)
-
-def git_toplevel(path: Path) -> Path:
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(path), "rev-parse", "--show-toplevel"],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-    except FileNotFoundError:
-        die("Error: git not found; cannot determine repository root")
-    except subprocess.CalledProcessError:
-        die("Error: not a git repository (or any of the parent directories)")
-    root = result.stdout.strip()
-    if not root:
-        die("Error: git returned empty repository root")
-    return Path(root).resolve()
-
-def resolve_repo_root(cli_root: Optional[str]) -> Path:
-    env_root = os.environ.get("SR_REPO_ROOT")
-    if cli_root:
-        candidate = Path(cli_root).expanduser().resolve()
-    elif env_root:
-        candidate = Path(env_root).expanduser().resolve()
-    else:
-        return git_toplevel(CWD)
-
-    if not candidate.exists() or not candidate.is_dir():
-        die("Error: repo root does not exist or is not a directory")
-    git_root = git_toplevel(candidate)
-    if git_root != candidate:
-        die("Error: repo root is not a git repository root")
-    return candidate
-
-def validate_repo_root(repo_root: Path) -> None:
-    if not (repo_root / "src").exists() and not (repo_root / "core").exists():
-        die("Error: repository root missing src/ or core/")
-    if not (repo_root / MARKER_FILE).exists():
-        die(f"Error: marker file '{MARKER_FILE}' not found in repository root")
     
 def safe_rmdir(path: Path) -> bool:
     """Absolutely every error check again just to confirm before deletion. 
@@ -246,10 +208,6 @@ def main():
 
     common_flags = argparse.ArgumentParser(add_help=False)
     common_flags.add_argument("--jobs", "-j", default=8, type=int, help="Number of parallel jobs Make runs. Default=8")
-    parser.add_argument(
-        "--repo-root",
-        help="Path to repository root (or set SR_REPO_ROOT). Defaults to git root.",
-    )
     
     level1_junction = parser.add_subparsers(dest="command", required=True)
     command_all = level1_junction.add_parser("all", parents=[common_flags], help="Build and install all targets")
@@ -258,13 +216,7 @@ def main():
     command_target.add_argument("targets", nargs="+", help="One or more node target names")
     args = parser.parse_args() 
 
-    ### SANITY CHECK - immediately fail if not used within repository
-    global REPO_ROOT, BUILD_DIR_PATH, CMAKELISTS_PATH, INSTALL_PREFIX
-    REPO_ROOT = resolve_repo_root(args.repo_root)
-    validate_repo_root(REPO_ROOT)
-    BUILD_DIR_PATH = REPO_ROOT / "build"
-    CMAKELISTS_PATH = REPO_ROOT / "CMakeLists.txt"
-    INSTALL_PREFIX = REPO_ROOT / "deploy"
+    ### SANITY CHECK - immediately fail if not used within SRP8-130 High level embedded repository
     try:
         CWD.relative_to(REPO_ROOT)
     except ValueError:
