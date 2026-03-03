@@ -96,15 +96,15 @@ Briefly describe the purpose of this DDS node.
 
 ## Topics Published to
 Enter topics published to below
-Topic | C++ Type | Description
+Topic | Topic Type | Description
 ------|----------|------------
-/domain/subsystem/topic|`C++ Type`|BMS Voltage
+/domain/subsystem/topic|`Topic Type`|BMS Voltage
 
 ## Topics Subscribed to
 Enter topics subscribed to below
-Topic | C++ Type | Description
+Topic | Topic Type | Description
 ------|----------|------------
-/domain/subsystem/topic|`C++ Type`|BMS Voltage
+/domain/subsystem/topic|`Topic Type`|BMS Voltage
 
 ## Parameters
 Under construction!
@@ -124,7 +124,7 @@ set(INCLUDE_DIRS
     include
 )
 set (LIBS 
-    dds_node
+    sr_node
     # add your type libraries here
     # add other dependencies here
 )
