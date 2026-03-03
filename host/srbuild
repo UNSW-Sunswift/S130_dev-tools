@@ -6,7 +6,7 @@
 # Date: 7/01/2026
 # Author: Ryan Wong
 #
-# Wrapper around CMake to allow you to intuitevly build and install all, one, or some targets
+# Wrapper around CMake to allow you to intuitively build and install all, one, or some targets
 # 
 # 
 # Usage:
@@ -58,20 +58,10 @@ def git_toplevel(path: Path) -> Path:
         die("Error: git returned empty repository root")
     return Path(root).resolve()
 
-def resolve_repo_root(cli_root: Optional[str]) -> Path:
-    env_root = os.environ.get("SR_REPO_ROOT")
-    if cli_root:
-        candidate = Path(cli_root).expanduser().resolve()
-    elif env_root:
-        candidate = Path(env_root).expanduser().resolve()
-    else:
-        return git_toplevel(CWD)
-
+def resolve_repo_root() -> Path:
+    candidate = git_toplevel(CWD)
     if not candidate.exists() or not candidate.is_dir():
         die("Error: repo root does not exist or is not a directory")
-    git_root = git_toplevel(candidate)
-    if git_root != candidate:
-        die("Error: repo root is not a git repository root")
     return candidate
 
 def validate_repo_root(repo_root: Path) -> None:
@@ -158,7 +148,7 @@ def build(targets: Optional[list[str]], jobs: int) -> None:
         if targets is None:
             print("Build: Building all targets")
             subprocess.run([
-                "cmake", "--build", str(BUILD_DIR_PATH), "-j", jobs_str
+                "cmake", "--build", str(BUILD_DIR_PATH), "--", jobs_str
             ], check=True)
         else:
             print("Build: Building specified targets")
@@ -246,10 +236,6 @@ def main():
 
     common_flags = argparse.ArgumentParser(add_help=False)
     common_flags.add_argument("--jobs", "-j", default=8, type=int, help="Number of parallel jobs Make runs. Default=8")
-    parser.add_argument(
-        "--repo-root",
-        help="Path to repository root (or set SR_REPO_ROOT). Defaults to git root.",
-    )
     
     level1_junction = parser.add_subparsers(dest="command", required=True)
     command_all = level1_junction.add_parser("all", parents=[common_flags], help="Build and install all targets")
@@ -260,7 +246,7 @@ def main():
 
     ### SANITY CHECK - immediately fail if not used within repository
     global REPO_ROOT, BUILD_DIR_PATH, CMAKELISTS_PATH, INSTALL_PREFIX
-    REPO_ROOT = resolve_repo_root(args.repo_root)
+    REPO_ROOT = resolve_repo_root()
     validate_repo_root(REPO_ROOT)
     BUILD_DIR_PATH = REPO_ROOT / "build"
     CMAKELISTS_PATH = REPO_ROOT / "CMakeLists.txt"
