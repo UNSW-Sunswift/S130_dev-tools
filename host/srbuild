@@ -2,7 +2,7 @@
 
 ###############################################################################
 # Sunswift High Level build tool
-# Version: V2.0
+# Version: V2.1
 # Date: 7/01/2026
 # Author: Ryan Wong
 #
@@ -16,60 +16,24 @@
 ###############################################################################
 
 import argparse
-import os
 import sys
 import subprocess
 import time
 import shutil
 from typing import Optional
 from pathlib import Path
+from srutils import resolve_repo_root, validate_repo_root, die
 
 CWD = Path.cwd().resolve()
 REPO_ROOT = Path()
 BUILD_DIR_PATH = Path()
 CMAKELISTS_PATH = Path()
 INSTALL_PREFIX = Path()
-MARKER_FILE = ".sunswift-evsn"
 
 # =================================================================================================
 # HELPERS
 # =================================================================================================
 
-def die(msg: str) -> None:
-    """Kills script and prints out msg"""
-    print(msg)
-    sys.exit(1)
-
-def git_toplevel(path: Path) -> Path:
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(path), "rev-parse", "--show-toplevel"],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-    except FileNotFoundError:
-        die("Error: git not found; cannot determine repository root")
-    except subprocess.CalledProcessError:
-        die("Error: not a git repository (or any of the parent directories)")
-    root = result.stdout.strip()
-    if not root:
-        die("Error: git returned empty repository root")
-    return Path(root).resolve()
-
-def resolve_repo_root() -> Path:
-    candidate = git_toplevel(CWD)
-    if not candidate.exists() or not candidate.is_dir():
-        die("Error: repo root does not exist or is not a directory")
-    return candidate
-
-def validate_repo_root(repo_root: Path) -> None:
-    if not (repo_root / "src").exists() and not (repo_root / "core").exists():
-        die("Error: repository root missing src/ or core/")
-    if not (repo_root / MARKER_FILE).exists():
-        die(f"Error: marker file '{MARKER_FILE}' not found in repository root")
-    
 def safe_rmdir(path: Path) -> bool:
     """Absolutely every error check again just to confirm before deletion. 
     In case any bugs in error checking happen before. Then deletes specified dir
@@ -246,8 +210,14 @@ def main():
 
     ### SANITY CHECK - immediately fail if not used within repository
     global REPO_ROOT, BUILD_DIR_PATH, CMAKELISTS_PATH, INSTALL_PREFIX
-    REPO_ROOT = resolve_repo_root()
-    validate_repo_root(REPO_ROOT)
+    try:
+        REPO_ROOT = resolve_repo_root(CWD)
+    except Exception as exc:
+        die(str(exc))
+    try:
+        validate_repo_root(REPO_ROOT)
+    except Exception as exc:
+        die(str(exc))
     BUILD_DIR_PATH = REPO_ROOT / "build"
     CMAKELISTS_PATH = REPO_ROOT / "CMakeLists.txt"
     INSTALL_PREFIX = REPO_ROOT / "deploy"

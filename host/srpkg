@@ -2,7 +2,7 @@
 
 ###############################################################################
 # Sunswift High Level DDS Package generator
-# Version: V3.0
+# Version: V3.1
 # Date: 24/12/2025
 # Author: Ryan Wong
 #
@@ -37,16 +37,14 @@ from typing import Optional
 from datetime import datetime
 from pathlib import Path
 from dataclasses import dataclass
+from srutils import resolve_repo_root, validate_repo_root, die, MARKER_FILE
 
 # =================================================================================================
 # CONSTANTS
 # =================================================================================================
 
 CWD = Path.cwd().resolve()
-# THIS ASSUMES that repo root is 2 directories above this script...
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if not (REPO_ROOT/"src").exists() and not (REPO_ROOT/"core").exists():
-    print(f"Error: {__file__} not 2 below repo root")
+REPO_ROOT = Path()
 
 # All of these are relative to pkg top level
 NESTED_DIRS = {
@@ -77,10 +75,6 @@ class PkgPaths:
 # HELPERS
 # =================================================================================================
 
-def die(msg: str) -> None:
-    print(msg)
-    sys.exit(1)
-    
 def dir_size(path: Path) -> int:
     return sum(
         p.stat().st_size
@@ -393,6 +387,13 @@ def main():
     args = parse_args()
 
     ### SANITY CHECK:
+    global REPO_ROOT
+    try:
+        REPO_ROOT = resolve_repo_root(CWD)
+        validate_repo_root(REPO_ROOT)
+    except Exception as exc:
+        die(str(exc))
+
     # Wheck that script is run in repo
     try:
         CWD.relative_to(REPO_ROOT)
