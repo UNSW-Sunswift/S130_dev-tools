@@ -153,7 +153,7 @@ def fill_param(paths: PkgPaths) -> None:
 # example_bool   = true
 
 """
-    with (paths.abs_pkg_path / FILES["param"]).open("w") as file:
+    with (paths.abs_pkg_path / FILES["param"].format(pkg_name=paths.pkg_name)).open("w") as file:
         file.write(text)
 
 def fill_main(paths: PkgPaths) -> None:
@@ -166,6 +166,8 @@ int main(int argc, char* argv[]) {{
 }}
 
 """
+    with (paths.abs_pkg_path / FILES["main"]).open("w") as file:
+        file.write(text)
 
 def pkg_exist_elsewhere(paths: PkgPaths) -> tuple[bool, Optional[Path]]:
     """Recursively checks if valid package with the same name exists in src
