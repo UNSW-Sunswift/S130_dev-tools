@@ -19,7 +19,7 @@
 #
 # src -> all your .cpp files
 # include -> all your .hpp files
-# param -> json files (probably) for static params
+# param -> files for static params
 # 
 # Usage in directory you want to create package in:
 #   - srpkg create <name>
@@ -29,15 +29,13 @@
 ###############################################################################
 
 import argparse
-import sys
 import re
 import shutil
-import json
 from typing import Optional
 from datetime import datetime
 from pathlib import Path
 from dataclasses import dataclass
-from srutils import resolve_repo_root, validate_repo_root, die, MARKER_FILE
+from srutils import resolve_repo_root, validate_repo_root, die
 
 # =================================================================================================
 # CONSTANTS
@@ -56,7 +54,7 @@ FILES = {
     "metadata": ".srpkg",
     "make": "CMakeLists.txt",
     "readme": "README.md",
-    "param": "param/{pkg_name}_param.json",
+    "param": "param/{pkg_name}_param.toml",
     "main": "src/main.cpp"
 }
 
@@ -135,16 +133,39 @@ install(
     COMPONENT ${{TARGET_NAME}}
 )
 install(
-    FILES param/${{TARGET_NAME}}_param.json
+    FILES param/${{TARGET_NAME}}_param.toml
     DESTINATION param
     COMPONENT ${{TARGET_NAME}}
 )"""
     with (paths.abs_pkg_path / FILES["make"]).open("w") as file:
         file.write(text)
 
-# TODO: When we figure out static params
 def fill_param(paths: PkgPaths) -> None:
-    pass
+    text = f"""# {paths.pkg_name}_param.toml
+# Parameter file for {paths.pkg_name}
+# All parameters are optional. Missing keys fall back to declared defaults in the node.
+# Undeclared parameters are ignored
+
+[params]
+# example_string = "hello"
+# example_int    = 42
+# example_float  = 3.14
+# example_bool   = true
+
+"""
+    with (paths.abs_pkg_path / FILES["param"]).open("w") as file:
+        file.write(text)
+
+def fill_main(paths: PkgPaths) -> None:
+    text = f"""#include "my_node.hpp" // TODO: change to your node
+
+int main(int argc, char* argv[]) {{
+    // TODO: initialise SRNode
+    // TODO: Spin SRNode and catch exceptions
+    return 0;
+}}
+
+"""
 
 def pkg_exist_elsewhere(paths: PkgPaths) -> tuple[bool, Optional[Path]]:
     """Recursively checks if valid package with the same name exists in src
@@ -153,7 +174,6 @@ def pkg_exist_elsewhere(paths: PkgPaths) -> tuple[bool, Optional[Path]]:
     Returns:
         tuple[bool, Optional[Path]]: (True/False, RELATIVE path of where it is/None)
     """
-    
     src_path = REPO_ROOT / "src"
     for path in src_path.rglob(paths.pkg_name):
         if path.is_dir() and (path/FILES["metadata"]).exists():
@@ -194,7 +214,7 @@ def safe_rmdir(paths: PkgPaths) -> None:
 
 def validate_name(name: str) -> PkgPaths:
     ### Validate node package name
-    pattern = r"^[a-z0-9_]*$"
+    pattern = r"^[a-z0-9_]*$" # technically not correct but...
     if not re.match(pattern, name):
         die("Invalid package name: must be in 'snake_case'")
 
@@ -239,9 +259,6 @@ def mkdir_package(paths: PkgPaths) -> None:
         if "{pkg_name}" in file:
             new_file = file.format(pkg_name=paths.pkg_name)
         (paths.abs_pkg_path / new_file).touch()
-        if "json" in new_file:
-            with (paths.abs_pkg_path / new_file).open("w") as json_file:
-                json_file.write("{}")
 
 def pkg_create(paths: PkgPaths) -> None:
     """Creates directory based on structure in top comment if it doesn't already exist.
@@ -269,6 +286,7 @@ def pkg_create(paths: PkgPaths) -> None:
         fill_readme(paths)
         fill_cmakelists(paths)
         fill_param(paths)
+        fill_main(paths)
     except Exception as e:
         if paths.abs_pkg_path.exists():
             safe_rmdir(paths)
@@ -394,7 +412,7 @@ def main():
     except Exception as exc:
         die(str(exc))
 
-    # Wheck that script is run in repo
+    # Check that script is run in repo
     try:
         CWD.relative_to(REPO_ROOT)
     except ValueError:
