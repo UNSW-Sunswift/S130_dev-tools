@@ -1,5 +1,13 @@
-# S130 Development tools V1.1.0
+# S130 Development tools V1.2.0
 
+## Version Notes: v1.2.0
+- Cleaned up repo root checks from Henry's merge
+- Removed repo root checks from `srlaunch`.
+- Added `host/srutils.py` for common logic between `srpkg` and `srbuild`
+- Added toml param file generation and autofilling, as well as autofilling a main file template in `srpkg`
+- Added integration tests for `srpkg` and `srlaunch`
+
+## Introduction
 This repository contains high-level development tools for Sunswift embedded and DDS projects. It is separated into host/ and target/. host/ contains the dev tools we are using during development time on our host machines. target/ contains scripts that should be run on the target (NVIDIA Drive THOR computer). It is intended to be a submodule in the SR-Mjolnir repository.
 
 
@@ -150,5 +158,4 @@ Then just `Ctrl-C` to shut down all nodes gracefully. It's that easy guys.
 
 ## Contributors
 Ryan Wong || z5417983
-
 Henry Jiang || z5416365
