@@ -20,7 +20,6 @@
 #   - ./srlaunch target node1 node2
 ###############################################################################
 
-import json
 import subprocess
 import sys
 import signal

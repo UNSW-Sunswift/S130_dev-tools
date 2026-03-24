@@ -1,6 +1,6 @@
 # S130 Development tools V1.2.0
 
-## Version Nodes: v1.2.0
+## Version Notes: v1.2.0
 - Cleaned up repo root checks from Henry's merge
 - Removed repo root checks from `srlaunch`.
 - Added `host/srutils.py` for common logic between `srpkg` and `srbuild`

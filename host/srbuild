@@ -16,7 +16,6 @@
 ###############################################################################
 
 import argparse
-import sys
 import subprocess
 import time
 import shutil
@@ -105,14 +104,14 @@ def build(targets: Optional[list[str]], jobs: int) -> None:
         jobs (int): number of jobs to run in parallel
     """
     print("============= Building Targets ===============")
-    jobs_str = f"-j{jobs}"
+    jobs_str = f"{jobs}"
     start_time = time.time()
     # Build targets
     try:
         if targets is None:
             print("Build: Building all targets")
             subprocess.run([
-                "cmake", "--build", str(BUILD_DIR_PATH), "--", jobs_str
+                "cmake", "--build", str(BUILD_DIR_PATH), "-j", jobs_str
             ], check=True)
         else:
             print("Build: Building specified targets")
@@ -120,7 +119,7 @@ def build(targets: Optional[list[str]], jobs: int) -> None:
             # If someone is using --target, build times probably tiny anyway
             for target in targets:
                 subprocess.run([
-                    "cmake", "--build", str(BUILD_DIR_PATH), "--target", target, "--", jobs_str
+                    "cmake", "--build", str(BUILD_DIR_PATH), "--target", target, "-j", jobs_str
                 ], check=True)
     except subprocess.CalledProcessError:
         die(f"Build: Error building targets")

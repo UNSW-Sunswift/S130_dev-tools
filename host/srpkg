@@ -216,7 +216,7 @@ def safe_rmdir(paths: PkgPaths) -> None:
 
 def validate_name(name: str) -> PkgPaths:
     ### Validate node package name
-    pattern = r"^[a-z0-9_]*$" # technically not correct but...
+    pattern = r"^[a-z0-9_]+$"
     if not re.match(pattern, name):
         die("Invalid package name: must be in 'snake_case'")
 
