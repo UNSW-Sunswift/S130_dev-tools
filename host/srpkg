@@ -129,7 +129,7 @@ target_link_libraries(${{TARGET_NAME}} PRIVATE ${{LIBS}})
 
 # Install time
 sr_install_node(${{TARGET_NAME}} param/${{TARGET_NAME}}_param.toml)
-)"""
+"""
     with (paths.abs_pkg_path / FILES["make"]).open("w") as file:
         file.write(text)
 
