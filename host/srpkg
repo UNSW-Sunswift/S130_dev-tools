@@ -111,6 +111,7 @@ def fill_cmakelists(paths: PkgPaths) -> None:
 set(TARGET_NAME {paths.pkg_name})
 set(SOURCES 
     src/main.cpp
+    # Add your sources here
 )
 set(INCLUDE_DIRS
     include
@@ -127,15 +128,7 @@ target_include_directories(${{TARGET_NAME}} PRIVATE ${{INCLUDE_DIRS}})
 target_link_libraries(${{TARGET_NAME}} PRIVATE ${{LIBS}})
 
 # Install time
-install(
-    TARGETS ${{TARGET_NAME}}
-    RUNTIME DESTINATION bin
-    COMPONENT ${{TARGET_NAME}}
-)
-install(
-    FILES param/${{TARGET_NAME}}_param.toml
-    DESTINATION param
-    COMPONENT ${{TARGET_NAME}}
+sr_install_node(${{TARGET_NAME}} param/${{TARGET_NAME}}_param.toml)
 )"""
     with (paths.abs_pkg_path / FILES["make"]).open("w") as file:
         file.write(text)
@@ -157,7 +150,7 @@ def fill_param(paths: PkgPaths) -> None:
         file.write(text)
 
 def fill_main(paths: PkgPaths) -> None:
-    text = f"""#include "my_node.hpp" // TODO: change to your node
+    text = f"""// #include "my_node.hpp" TODO: change to your node
 
 int main(int argc, char* argv[]) {{
     // TODO: initialise SRNode
