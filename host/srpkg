@@ -13,12 +13,14 @@
 #     .srpkg
 #     src/
 #     include/
+#     test/
 #     param/
 #     CMakeLists.txt
 #     README.md
 #
 # src -> all your .cpp files
 # include -> all your .hpp files
+# test -> all your test files
 # param -> files for static params
 # 
 # Usage in directory you want to create package in:
@@ -40,7 +42,9 @@ from srutils import resolve_repo_root, validate_repo_root, die
 # =================================================================================================
 # CONSTANTS
 # =================================================================================================
-
+COMPILER_QNX_FLAG = "SR_TARGET_QNX"
+COMPILER_LINUX_FLAG = "SR_TARGET_LINUX"
+TARGET = "QNX" # default target, can be overridden by --linux or --qnx flag when creating package
 CWD = Path.cwd().resolve()
 REPO_ROOT = Path()
 
@@ -49,6 +53,7 @@ NESTED_DIRS = {
     "src": "src",
     "include": "include",
     "param": "param",
+    "test": "test"
 }
 FILES = {
     "metadata": ".srpkg",
@@ -82,6 +87,7 @@ def dir_size(path: Path) -> int:
 
 def fill_readme(paths: PkgPaths) -> None:
     text = f"""# {paths.pkg_name} DDS Package
+Target: {TARGET}
 
 ## Description
 Briefly describe the purpose of this DDS node.
@@ -107,7 +113,11 @@ Written by `Your name here` | `Your zID here`"""
         file.write(text)
         
 def fill_cmakelists(paths: PkgPaths) -> None:
-    text = f"""# Per-node info
+    text = f"""if({COMPILER_QNX_FLAG if TARGET=="LINUX" else COMPILER_LINUX_FLAG})
+    return()
+endif
+
+# Per-node info
 set(TARGET_NAME {paths.pkg_name})
 set(SOURCES 
     src/main.cpp
@@ -226,8 +236,6 @@ def parse_args() ->argparse.Namespace:
     """
     Constructs a 1 level parser with all arguments specified in CLI_ARGS above, 
     then executes and returns args
-    
-    You can use args.command (first level), then args.name for leaf arg
     """
     ### Command line arguments
     root_parser = argparse.ArgumentParser(
@@ -237,10 +245,13 @@ def parse_args() ->argparse.Namespace:
     # at a junction, there can be many options, where one option can be another junction
     # imagine a tree structure
     level1_junction = root_parser.add_subparsers(dest="command", required=True)
-    for command, arg_array in CLI_ARGS.items():
-        level1_option = level1_junction.add_parser(command)
-        for arg in arg_array:
-            level1_option.add_argument(arg)
+    command_create = level1_junction.add_parser("create")
+    command_info = level1_junction.add_parser("info")
+    command_list = level1_junction.add_parser("list")
+    command_create.add_argument("name", help="Name of package to create (snake_case)")
+    command_create.add_argument("--linux", action="store_true", help="Package to target Linux")
+    command_create.add_argument("--qnx", action="store_true", help="Package to target QNX")
+    command_info.add_argument("name", help="Name of package to get info on")
     
     return root_parser.parse_args()
 
