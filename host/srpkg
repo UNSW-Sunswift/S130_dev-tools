@@ -424,6 +424,9 @@ def main():
     except ValueError:
         die("Error: Script must be run within repository")
 
+    if (args.linux) {
+        TARGET="LINUX"
+    }
     ### LOGIC BASED ON FLAGS
     cmd = args.command
     if cmd == "create":
