@@ -2,13 +2,12 @@
 
 ###############################################################################
 # Sunswift High Level DDS Package generator
-# Version: V3.1
-# Date: 24/12/2025
+# Version: V3.2
 # Author: Ryan Wong
 #
 # Creates a new package according to this structure in the directory which you
 # run this script from
-# 
+#
 # <package_name>/
 #     .srpkg
 #     src/
@@ -22,9 +21,9 @@
 # include -> all your .hpp files
 # test -> all your test files
 # param -> files for static params
-# 
+#
 # Usage in directory you want to create package in:
-#   - srpkg create <name>
+#   - srpkg create <name> [--linux | --qnx]
 # Usage from anywhere in repository
 #   - srpkg info <name>
 #   - srpkg list
@@ -44,9 +43,7 @@ from srutils import resolve_repo_root, validate_repo_root, die
 # =================================================================================================
 COMPILER_QNX_FLAG = "SR_TARGET_QNX"
 COMPILER_LINUX_FLAG = "SR_TARGET_LINUX"
-TARGET = "QNX" # default target, can be overridden by --linux or --qnx flag when creating package
 CWD = Path.cwd().resolve()
-REPO_ROOT = Path()
 
 # All of these are relative to pkg top level
 NESTED_DIRS = {
@@ -61,12 +58,6 @@ FILES = {
     "readme": "README.md",
     "param": "param/{pkg_name}_param.toml",
     "main": "src/main.cpp"
-}
-
-CLI_ARGS = {
-    "create": ["name"],
-    "info": ["name"],
-    "list": []
 }
 
 @dataclass
@@ -85,9 +76,9 @@ def dir_size(path: Path) -> int:
         if p.is_file()
     )
 
-def fill_readme(paths: PkgPaths) -> None:
+def fill_readme(paths: PkgPaths, target: str) -> None:
     text = f"""# {paths.pkg_name} DDS Package
-Target: {TARGET}
+Target: {target}
 
 ## Description
 Briefly describe the purpose of this DDS node.
@@ -111,22 +102,24 @@ Under construction!
 Written by `Your name here` | `Your zID here`"""
     with (paths.abs_pkg_path / FILES["readme"]).open("w") as file:
         file.write(text)
-        
-def fill_cmakelists(paths: PkgPaths) -> None:
-    text = f"""if({COMPILER_QNX_FLAG if TARGET=="LINUX" else COMPILER_LINUX_FLAG})
+
+def fill_cmakelists(paths: PkgPaths, target: str) -> None:
+    # Guard flag is the opposing platform: a Linux package skips when SR_TARGET_QNX is set, and vice versa
+    guard_flag = COMPILER_QNX_FLAG if target == "LINUX" else COMPILER_LINUX_FLAG
+    text = f"""if({guard_flag})
     return()
 endif
 
 # Per-node info
 set(TARGET_NAME {paths.pkg_name})
-set(SOURCES 
+set(SOURCES
     src/main.cpp
     # Add your sources here
 )
 set(INCLUDE_DIRS
     include
 )
-set (LIBS 
+set (LIBS
     sr_node
     # add your type libraries here
     # add other dependencies here
@@ -172,91 +165,73 @@ int main(int argc, char* argv[]) {{
     with (paths.abs_pkg_path / FILES["main"]).open("w") as file:
         file.write(text)
 
-def pkg_exist_elsewhere(paths: PkgPaths) -> tuple[bool, Optional[Path]]:
-    """Recursively checks if valid package with the same name exists in src
-    Args:
-        paths (PkgPaths): dataclass which stores name and abs path of pkg
-    Returns:
-        tuple[bool, Optional[Path]]: (True/False, RELATIVE path of where it is/None)
+def pkg_exist_elsewhere(paths: PkgPaths, repo_root: Path) -> Optional[Path]:
+    """Recursively search src/ for a package with the same name.
+
+    Returns the path relative to repo_root if found, None otherwise.
     """
-    src_path = REPO_ROOT / "src"
+    src_path = repo_root / "src"
     for path in src_path.rglob(paths.pkg_name):
-        if path.is_dir() and (path/FILES["metadata"]).exists():
-            return (True, path.relative_to(REPO_ROOT))
+        if path.is_dir() and (path / FILES["metadata"]).exists():
+            return path.relative_to(repo_root)
+    return None
 
-    return (False, None)
-
-def safe_rmdir(paths: PkgPaths) -> None:
-    """Absolutely every error check again just to confirm before deletion. 
-    In case any bugs in error checking happen before. Then deletes
-    Args:
-        paths (PkgPaths): dataclass which stores name and abs path of pkg
+def safe_rmdir(paths: PkgPaths, repo_root: Path) -> None:
+    """Verify every safety condition then delete the package directory.
     """
     if not paths.abs_pkg_path.exists():
         die("Delete: Path does not exist")
-        
+
     if not paths.abs_pkg_path.is_dir():
         die("Delete: Path is not a directory")
-        
-    if not (paths.abs_pkg_path/FILES["metadata"]).exists():
+
+    if not (paths.abs_pkg_path / FILES["metadata"]).exists():
         die("Delete: Path is not a Sunswift Package")
-        
+
     if paths.abs_pkg_path.is_symlink():
         die("Delete: Path is a symlink")
 
     try:
-        # Check if path is within repository 
-        paths.abs_pkg_path.relative_to(REPO_ROOT)
+        paths.abs_pkg_path.relative_to(repo_root)
     except ValueError:
-        die("Path not within SRP8-130_EMBD_High_Level repository")
-    
-    if (paths.abs_pkg_path == REPO_ROOT or 
-        paths.abs_pkg_path == "/" or 
-        paths.abs_pkg_path == REPO_ROOT / "src"):
+        die("Delete: Path is not within repository")
+
+    if (paths.abs_pkg_path == repo_root or
+            paths.abs_pkg_path == Path("/") or
+            paths.abs_pkg_path == repo_root / "src"):
         die("wtf are u doing man")
 
     shutil.rmtree(paths.abs_pkg_path)
 
 def validate_name(name: str) -> PkgPaths:
-    ### Validate node package name
     pattern = r"^[a-z0-9_]+$"
     if not re.match(pattern, name):
         die("Invalid package name: must be in 'snake_case'")
-
-    # Make paths objects
-    abs_pkg_path = CWD / name
-    paths = PkgPaths(name, abs_pkg_path)
-    return paths
+    return PkgPaths(name, CWD / name)
 
 # =================================================================================================
 # CORE LOGIC
 # =================================================================================================
 
-def parse_args() ->argparse.Namespace:
-    """
-    Constructs a 1 level parser with all arguments specified in CLI_ARGS above, 
-    then executes and returns args
-    """
-    ### Command line arguments
+def parse_args() -> argparse.Namespace:
+    """Build the CLI parser and return parsed arguments."""
     root_parser = argparse.ArgumentParser(
-        description=f"Sunswift DDS package management tool. \
-        Packages are created in your current working directory."
+        description="Sunswift DDS package management tool. "
+                    "Packages are created in your current working directory."
     )
-    # at a junction, there can be many options, where one option can be another junction
-    # imagine a tree structure
     level1_junction = root_parser.add_subparsers(dest="command", required=True)
     command_create = level1_junction.add_parser("create")
     command_info = level1_junction.add_parser("info")
-    command_list = level1_junction.add_parser("list")
+    level1_junction.add_parser("list")
     command_create.add_argument("name", help="Name of package to create (snake_case)")
     command_create.add_argument("--linux", action="store_true", help="Package to target Linux")
     command_create.add_argument("--qnx", action="store_true", help="Package to target QNX")
     command_info.add_argument("name", help="Name of package to get info on")
-    
+
     return root_parser.parse_args()
 
 def mkdir_package(paths: PkgPaths) -> None:
-    """Actually makes the directory structure"""
+    """Create the package directory tree and empty files."""
     paths.abs_pkg_path.mkdir()
     for dir in NESTED_DIRS.values():
         (paths.abs_pkg_path / dir).mkdir()
@@ -266,74 +241,63 @@ def mkdir_package(paths: PkgPaths) -> None:
             new_file = file.format(pkg_name=paths.pkg_name)
         (paths.abs_pkg_path / new_file).touch()
 
-def pkg_create(paths: PkgPaths) -> None:
-    """Creates directory based on structure in top comment if it doesn't already exist.
+def pkg_create(paths: PkgPaths, repo_root: Path, target: str) -> None:
+    """Create a new package in CWD if no name conflict exists under src/.
+
     Args:
-        paths (PkgPaths): dataclass which stores name and abs path of pkg
+        paths: Package name and absolute destination path.
+        repo_root: Root of the Sunswift repository.
+        target: Build target platform, either "QNX" or "LINUX".
     """
-    # Must be created in src/
-    try:
-        CWD.relative_to(REPO_ROOT/"src")
-    except ValueError:
-        die("Error: Packages should be created only in src/")
-
-    # Check if something with same name already exists in CWD
     if paths.abs_pkg_path.exists():
-        die(f"Error: {paths.pkg_name} already exists at '{paths.abs_pkg_path.relative_to(REPO_ROOT)}'")
+        die(f"Error: {paths.pkg_name} already exists at '{paths.abs_pkg_path}'")
 
-    # Check if pkg exists elsehwhere in src/ (if not in cwd)
-    res, location = pkg_exist_elsewhere(paths)
-    if res:
+    # Duplicate target names break CMake — check all of src/ recursively
+    location = pkg_exist_elsewhere(paths, repo_root)
+    if location is not None:
         die(f"Error: {paths.pkg_name} already exists at '{location}'")
 
-    # Create directories and files    
     try:
         mkdir_package(paths)
-        fill_readme(paths)
-        fill_cmakelists(paths)
+        fill_readme(paths, target)
+        fill_cmakelists(paths, target)
         fill_param(paths)
         fill_main(paths)
     except Exception as e:
         if paths.abs_pkg_path.exists():
-            safe_rmdir(paths)
+            safe_rmdir(paths, repo_root)
         die(f"Error creating package: {e}")
 
     print(f"Package '{paths.pkg_name}' created successfully!")
-    print(f"Location: {paths.abs_pkg_path.relative_to(REPO_ROOT)}\n")
+    print(f"Location: {paths.abs_pkg_path}\n")
 
     print("Created structure:")
-    # Directories
     for dir in NESTED_DIRS.values():
-        dir_path = paths.abs_pkg_path / dir
         print(f"  {dir}")
-    # Files
     for file_name in FILES.values():
-        new_file_name = file_name
         if "{pkg_name}" in file_name:
-            new_file_name = file_name.format(pkg_name=paths.pkg_name)
-        file_path = paths.abs_pkg_path / new_file_name
-        print(f"  {new_file_name}")
+            file_name = file_name.format(pkg_name=paths.pkg_name)
+        print(f"  {file_name}")
 
-def pkg_info(paths: PkgPaths) -> None:
-    """ Finds package with given name in repository
+def pkg_info(paths: PkgPaths, repo_root: Path) -> None:
+    """Print metadata and file listing for a package found under src/.
+
     Args:
-        paths (PkgPaths): _description_
+        paths: Package name and absolute destination path.
+        repo_root: Root of the Sunswift repository.
     """
-    res, location = pkg_exist_elsewhere(paths)
+    location = pkg_exist_elsewhere(paths, repo_root)
 
-    if not res or location is None:
+    if location is None:
         die(f"Package: '{paths.pkg_name}' not found in src/")
-        return # pydantic shut up
+        return
 
-    print(f"=============== {paths.pkg_name} INFO ===============")
-    # get size and num things
-    abs_path = REPO_ROOT / location
+    abs_path = repo_root / location
     size_bytes = dir_size(abs_path)
     size_kb = size_bytes / 1024
     num_files = sum(1 for thing in abs_path.rglob("*") if thing.is_file())
     num_dirs = sum(1 for thing in abs_path.rglob("*") if thing.is_dir())
 
-    # Get last modified + creation times
     all_files = list(abs_path.rglob("*"))
     if all_files:
         creation_ts = min(p.stat().st_ctime for p in all_files)
@@ -344,18 +308,14 @@ def pkg_info(paths: PkgPaths) -> None:
     creation_date = datetime.fromtimestamp(creation_ts).strftime("%d/%m/%Y %H:%M:%S")
     last_mod_date = datetime.fromtimestamp(last_mod_ts).strftime("%d/%m/%Y %H:%M:%S")
 
-    # Combine all names to compute max padding
-    all_names = list(NESTED_DIRS.values()) + list(FILES.values())
-    max_len = max(len(name) for name in all_names) + 2 
-
+    print(f"=============== {paths.pkg_name} INFO ===============")
     print(f"Package: '{paths.pkg_name}'")
     print(f"Location: {location}")
     print(f"Total size: {size_bytes} B ({size_kb:.2f} KB)")
     print(f"Contents: {num_dirs} directories, {num_files} files")
     print(f"Created: {creation_date}")
     print(f"Last modified: {last_mod_date}")
-    
-    # List source files
+
     src_dir = abs_path / "src"
     if src_dir.exists():
         cpp_files = sorted([f.relative_to(abs_path) for f in src_dir.rglob("*.cpp")])
@@ -364,7 +324,6 @@ def pkg_info(paths: PkgPaths) -> None:
             for f in cpp_files:
                 print(f"  {f}")
 
-    # List header files
     include_dir = abs_path / "include"
     if include_dir.exists():
         hpp_files = sorted([f.relative_to(abs_path) for f in include_dir.rglob("*.hpp")])
@@ -373,32 +332,27 @@ def pkg_info(paths: PkgPaths) -> None:
             for f in hpp_files:
                 print(f"  {f}")
 
-def pkg_list() -> None:
-    """Lists all valid DDS packages under src/. Valid means contains FILES["metadata"]"""
-    src_root = REPO_ROOT / "src"
+def pkg_list(repo_root: Path) -> None:
+    """List all valid packages under src/, identified by the .srpkg marker.
+
+    Args:
+        repo_root: Root of the Sunswift repository.
+    """
+    src_root = repo_root / "src"
     if not src_root.exists():
         die("No src/ directory found in repository.")
 
-    print(f"=============== NODE LIST ===============")
     packages = []
-
-    # recursively search
     for path in src_root.rglob("*"):
         if path.is_dir() and (path / FILES["metadata"]).exists():
-            pkg_name = path.name
-            rel_path = path.relative_to(REPO_ROOT)
-            packages.append((pkg_name, rel_path))
+            packages.append((path.name, path.relative_to(repo_root)))
 
+    print("=============== NODE LIST ===============")
     if not packages:
         print("No packages found in src/")
         return
 
-    # sort by name for neatness (already sorts using first tuple element)
-    # packages.sort()
-
-    # Determine padding for alignment
     max_name_len = max(len(name) for name, _ in packages) + 2
-
     print(f"Found {len(packages)} package(s) in src/:\n")
     for name, rel_path in packages:
         print(f"  {name.ljust(max_name_len)} : {rel_path}")
@@ -410,33 +364,28 @@ def pkg_list() -> None:
 def main():
     args = parse_args()
 
-    ### SANITY CHECK:
-    global REPO_ROOT
+    repo_root = Path()
     try:
-        REPO_ROOT = resolve_repo_root(CWD)
-        validate_repo_root(REPO_ROOT)
+        repo_root = resolve_repo_root(CWD)
+        validate_repo_root(repo_root)
     except Exception as exc:
         die(str(exc))
 
-    # Check that script is run in repo
     try:
-        CWD.relative_to(REPO_ROOT)
+        CWD.relative_to(repo_root)
     except ValueError:
         die("Error: Script must be run within repository")
 
-    if (args.linux) {
-        TARGET="LINUX"
-    }
-    ### LOGIC BASED ON FLAGS
     cmd = args.command
     if cmd == "create":
+        target = "LINUX" if args.linux else "QNX"
         paths = validate_name(args.name)
-        pkg_create(paths)
+        pkg_create(paths, repo_root, target)
     elif cmd == "info":
         paths = validate_name(args.name)
-        pkg_info(paths)
+        pkg_info(paths, repo_root)
     elif cmd == "list":
-        pkg_list()
+        pkg_list(repo_root)
 
 
 if __name__ == "__main__":

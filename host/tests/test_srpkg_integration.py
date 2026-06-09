@@ -67,11 +67,6 @@ def test_create_rejects_duplicate_in_other_dir(repo, src):
     assert r.returncode != 0
     assert "already exists" in r.stdout
 
-def test_create_rejects_outside_src(repo):
-    r = run("create", "my_node", cwd=repo)
-    assert r.returncode != 0
-    assert "src" in r.stdout
-
 def test_create_rejects_outside_repo(repo):
     r = run("create", "my_node", cwd=repo.parent)
     assert r.returncode != 0

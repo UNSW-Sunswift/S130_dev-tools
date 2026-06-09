@@ -36,7 +36,5 @@ def resolve_repo_root(cwd: Path = Path.cwd()) -> Path:
     return candidate
 
 def validate_repo_root(repo_root: Path, marker_file: str = MARKER_FILE) -> None:
-    if not ((repo_root / "src").exists() and (repo_root / "core").exists()):
-        raise RuntimeError("Error: repository root missing src/ or core/. Are you in SR-Mjolnir?\nYou may be running this in a submodule")
     if not (repo_root / marker_file).exists():
-        raise RuntimeError(f"Error: marker file '{marker_file}' not found in repository root")
+        raise RuntimeError(f"Error: marker file '{marker_file}' not found in repository root. Are you in a Sunswift repository?")
