@@ -15,3 +15,9 @@ def repo(tmp_path: Path) -> Path:
 @pytest.fixture
 def src(repo: Path) -> Path:
     return repo / "src"
+
+@pytest.fixture
+def configured_repo(repo: Path) -> Path:
+    """Repo that passes all srbuild sanity checks (has CMakeLists.txt)."""
+    (repo / "CMakeLists.txt").touch()
+    return repo

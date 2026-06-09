@@ -1,7 +1,5 @@
 ###############################################################################
 # Integration tests for srpkg CLI
-# Version: V1.0
-# Date: 16/03/2026
 # Author: Ryan Wong
 #
 # Made to run automatically on CI. Tests srpkg end to end by mocking a repository 
@@ -52,13 +50,13 @@ def test_create_basic(repo: Path, src: Path) -> None:
     assert (pkg / "CMakeLists.txt").exists()
     assert (pkg / "README.md").exists()
 
-def test_create_rejects_local_duplicate(repo, src):
+def test_create_rejects_local_duplicate(src: Path) -> None:
     run("create", "my_node", cwd=src)
     r = run("create", "my_node", cwd=src)
     assert r.returncode != 0
     assert "already exists" in r.stdout
 
-def test_create_rejects_duplicate_in_other_dir(repo, src):
+def test_create_rejects_duplicate_in_other_dir(src: Path) -> None:
     sub = src / "subsystem"
     sub.mkdir()
     run("create", "my_node", cwd=sub)
@@ -67,35 +65,35 @@ def test_create_rejects_duplicate_in_other_dir(repo, src):
     assert r.returncode != 0
     assert "already exists" in r.stdout
 
-def test_create_rejects_outside_repo(repo):
+def test_create_rejects_outside_repo(repo: Path) -> None:
     r = run("create", "my_node", cwd=repo.parent)
     assert r.returncode != 0
 
-def test_create_rejects_bad_name(repo, src):
+def test_create_rejects_bad_name(src: Path) -> None:
     for bad in ["MyNode", "my-node", "my node", "my.node"]:
         r = run("create", bad, cwd=src)
         assert r.returncode != 0, f"Expected failure for name: {bad}"
 
 
 ### srpkg info tests
-def test_info_found(repo, src):
+def test_info_found(src: Path) -> None:
     run("create", "my_node", cwd=src)
     r = run("info", "my_node", cwd=src)
     assert r.returncode == 0
     assert "my_node" in r.stdout
     assert "Location" in r.stdout
 
-def test_info_not_found(repo, src):
+def test_info_not_found(src: Path) -> None:
     r = run("info", "ghost_node", cwd=src)
     assert r.returncode != 0
 
-def test_info_shows_cpp_files(repo, src):
+def test_info_shows_cpp_files(src: Path) -> None:
     run("create", "my_node", cwd=src)
     (src / "my_node" / "src" / "helper.cpp").write_text("// helper")
     r = run("info", "my_node", cwd=src)
     assert "helper.cpp" in r.stdout
 
-def test_info_shows_hpp_files(repo, src):
+def test_info_shows_hpp_files(src: Path) -> None:
     run("create", "my_node", cwd=src)
     (src / "my_node" / "include" / "helper.hpp").write_text("// header")
     r = run("info", "my_node", cwd=src)
@@ -103,7 +101,7 @@ def test_info_shows_hpp_files(repo, src):
 
 
 ### srpkg list tests
-def test_list_finds_packages(repo, src):
+def test_list_finds_packages(src: Path) -> None:
     run("create", "node_a", cwd=src)
     run("create", "node_b", cwd=src)
     r = run("list", cwd=src)
@@ -111,7 +109,7 @@ def test_list_finds_packages(repo, src):
     assert "node_a" in r.stdout
     assert "node_b" in r.stdout
 
-def test_list_finds_packages_other_dir(repo, src):
+def test_list_finds_packages_other_dir(repo: Path, src: Path) -> None:
     sub = src / "subsystem"
     sub.mkdir()
     run("create", "node_a", cwd=src)
@@ -120,13 +118,13 @@ def test_list_finds_packages_other_dir(repo, src):
     assert r.returncode == 0
     assert "node_a" in r.stdout
     assert "node_b" in r.stdout
-    
-def test_list_empty(repo, src):
+
+def test_list_empty(src: Path) -> None:
     r = run("list", cwd=src)
     assert r.returncode == 0
     assert "No packages found" in r.stdout
 
-def test_list_ignores_dirs_without_marker(repo, src):
+def test_list_ignores_dirs_without_marker(src: Path) -> None:
     (src / "not_a_package").mkdir()
     r = run("list", cwd=src)
     assert "not_a_package" not in r.stdout
