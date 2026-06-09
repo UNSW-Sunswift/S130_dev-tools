@@ -2,7 +2,6 @@
 
 ###############################################################################
 # Sunswift High Level DDS Package generator
-# Version: V3.2
 # Author: Ryan Wong
 #
 # Creates a new package according to this structure in the directory which you
@@ -36,7 +35,7 @@ from typing import Optional
 from datetime import datetime
 from pathlib import Path
 from dataclasses import dataclass
-from srutils import resolve_repo_root, validate_repo_root, die, COMPILER_QNX_FLAG, COMPILER_LINUX_FLAG
+from common_helpers import resolve_repo_root, validate_repo_root, die, COMPILER_QNX_FLAG, COMPILER_LINUX_FLAG
 
 # =================================================================================================
 # CONSTANTS
