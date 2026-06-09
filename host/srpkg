@@ -36,13 +36,11 @@ from typing import Optional
 from datetime import datetime
 from pathlib import Path
 from dataclasses import dataclass
-from srutils import resolve_repo_root, validate_repo_root, die
+from srutils import resolve_repo_root, validate_repo_root, die, COMPILER_QNX_FLAG, COMPILER_LINUX_FLAG
 
 # =================================================================================================
 # CONSTANTS
 # =================================================================================================
-COMPILER_QNX_FLAG = "SR_TARGET_QNX"
-COMPILER_LINUX_FLAG = "SR_TARGET_LINUX"
 CWD = Path.cwd().resolve()
 
 # All of these are relative to pkg top level
@@ -370,11 +368,6 @@ def main():
         validate_repo_root(repo_root)
     except Exception as exc:
         die(str(exc))
-
-    try:
-        CWD.relative_to(repo_root)
-    except ValueError:
-        die("Error: Script must be run within repository")
 
     cmd = args.command
     if cmd == "create":

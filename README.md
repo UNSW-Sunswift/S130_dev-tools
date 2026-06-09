@@ -1,22 +1,21 @@
 # S130 Development tools V1.2.0
 
-## Version Notes: v1.2.0
-- Cleaned up repo root checks from Henry's merge
-- Removed repo root checks from `srlaunch`.
-- Added `host/srutils.py` for common logic between `srpkg` and `srbuild`
-- Added toml param file generation and autofilling, as well as autofilling a main file template in `srpkg`
-- Added integration tests for `srpkg` and `srlaunch`
+## Version Notes: v1.3.0
+- Added `--linux` and `--qnx` flags to `srpkg create` which adds a conditional compile statement to the top of the CMakeLists.txt
+- Removed src/ and core/ checks in repo root for srpkg so all you need to run srpkg is to be in a git repo with `.sunswift-evsn` in the root
+- Refactored to remove ugly globals and update docstrings
+- Removed pytest checking for src/ and core/
 
 ## Introduction
-This repository contains high-level development tools for Sunswift embedded and DDS projects. It is separated into host/ and target/. host/ contains the dev tools we are using during development time on our host machines. target/ contains scripts that should be run on the target (NVIDIA Drive THOR computer). It is intended to be a submodule in the SR-Mjolnir repository.
+This repository contains high-level development tools for Sunswift embedded and DDS projects. It is separated into host/ and target/. host/ contains the dev tools we are using during development time on our host machines. target/ contains scripts that should be run on the target. It is intended to be a submodule in the SR-Mjolnir repository.
 
+> **TARGET/SRLAUNCH IS NOW DEPRECATED AS WE WILL USE QNX'S OWN PROCESS MANAGEMENT TOOL**
 
 It includes:
 
 - `srpkg`: DDS package creation and management tool
 - `srbuild`: Build tool for compiling and deploying DDS packages
-- `srlaunch`: Tool for starting nodes
-- `srdds`: (WORK IN PROGRESS) Tool for managing active nodes
+
 
 ## Getting Started
 
@@ -36,7 +35,7 @@ I recommend adding this to your .bashrc
 To create a new DDS package in the **current working directory**:
 
 ```bash
-srpkg create <package_name>
+srpkg create <package_name> [--linux | --qnx]
 ```
 
 This will create a new directory with the following structure:
@@ -46,13 +45,14 @@ This will create a new directory with the following structure:
 ├── .srpkg              # Package metadata file
 ├── src/                # Source files (.cpp)
 ├── include/            # Header files (.hpp)
-├── param/              # Parameter files (JSON)
-├── param/param.json    # Default parameter template
+├── test/               # Unit tests
+├── param/              # Parameter files
+├── param/param.toml    # Default parameter template
 ├── CMakeLists.txt      # Build configuration template
 └── README.md           # Package documentation
 ```
 
-The package will be created in your current working directory.
+The package will be created in your **current working directory**. Packages default to QNX as the build target, but you can specify `--linux` instead. Technically `--qnx` is redundant, but for clarity's sake it's there.
 
 #### Package information and listing:
 These commands may be used from anywhere in the repository
@@ -76,8 +76,7 @@ SR-Mjolnir/
 ├── build/          # CMake-required files
 ├── deploy/
 │     ├── bin/       # Node executables
-│     ├── param/
-│     └── tools/     # srlaunch, srdds
+│     └── param/     # Runtime parameter files
 └── ...
 ```
 #### Building all targets:
@@ -112,14 +111,7 @@ By default, `srbuild` uses 8 parallel jobs for compilation. You can customize th
 srbuild all --jobs 4
 srbuild target package1 -j 16
 ```
-### 4. Using srlaunch
-Run `srlaunch` from the `deploy/tools` directory only. The version in the submodule repo is for version control.
-```bash
-cd deploy/tools
-./srlaunch all
-./srlaunch target node1 node2
-```
-Then just `Ctrl-C` to shut down all nodes gracefully. It's that easy guys.
+
 ## Example Workflow
 
 1. Create a new DDS package:
@@ -128,11 +120,9 @@ Then just `Ctrl-C` to shut down all nodes gracefully. It's that easy guys.
    srpkg create my_dds_node
    ```
 
-2. Add your source code to `my_dds_node/src/` and headers to `my_dds_node/include/`
+2. Add your source code to `my_dds_node/src/`, headers to `my_dds_node/include/` and unit tests to `my_dds_node/test/`
 
 3. Fill out the template CMakeLists.txt
-
-3. Add `add_subdirectory(relative/path/to/my_dds_node)` to src/CMakeLists.txt to enable the build
 
 4. Build the package:
    ```bash
@@ -141,21 +131,13 @@ Then just `Ctrl-C` to shut down all nodes gracefully. It's that easy guys.
    srbuild all
    ```
 
-5. Launch the node:
-   ```bash
-   # in deploy/tools
-   ./srlaunch target my_dds_node
-   # OR
-   ./srlaunch all
-   ```
+5. Ready to deploy or test!
 ## Notes
 
 - Both tools must be run from within the SR-Mjolnir repository
 - `srpkg` creates packages in the current working directory
 - `srbuild` operates on the entire repository build system
-- `srlaunch` is used from the deploy directory
-- `srdds` is currently work in progress
 
 ## Contributors
-Ryan Wong || z5417983
-Henry Jiang || z5416365
+- Ryan Wong || z5417983
+- Henry Jiang || z5416365

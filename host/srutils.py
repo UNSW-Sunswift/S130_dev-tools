@@ -4,6 +4,11 @@ from pathlib import Path
 import subprocess
 import sys
 
+### SHARED CONSTANTS
+COMPILER_QNX_FLAG = "SR_TARGET_QNX"
+COMPILER_LINUX_FLAG = "SR_TARGET_LINUX"
+
+### INTERNAL CONSTANTS
 MARKER_FILE = ".sunswift-evsn"
 
 def die(msg: str) -> None:
