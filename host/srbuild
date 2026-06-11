@@ -38,7 +38,7 @@ class BuildData:
     build_dir_path: Path
     install_prefix: Path
     cmakelists_path: Path
-    target_platform: str # "QNX" or "LINUX"
+    target_platform: str # "qnx" or "linux"
 
 # =================================================================================================
 # HELPERS
@@ -109,7 +109,7 @@ def configure_cmake(build_data: BuildData) -> None:
         f"-DCMAKE_INSTALL_PREFIX={build_data.install_prefix}"
     ]
     
-    if build_data.target_platform == "QNX":
+    if build_data.target_platform == "qnx":
         cmd.append(f"-DCMAKE_TOOLCHAIN_FILE={build_data.repo_root / Path(QNX_TOOLCHAIN_PATH)}")
         
     try:
@@ -187,19 +187,22 @@ def install(targets: Optional[list[str]], build_data: BuildData) -> None:
     end_time = time.time()
     print(f"Install finished in {end_time-start_time:.4f} seconds")
 
-def clean(build_data: BuildData) -> None:
-    """Deletes build/ from repo root."""
+def clean(dirs_to_clean: list[Path], build_data: BuildData) -> None:
+    """Deletes one or both platform build directories (build/linux, build/qnx)."""
     print("============= Cleaning Targets ===============")
-    res = input("Would you like to remove /build from repository root? (y/n): ")
+    dirs_str = ", ".join(str(p) for p in dirs_to_clean)
+    res = input(f"Would you like to remove {dirs_str}? (y/n): ")
     if res.lower() != "y":
         die("Cancelling clean..")
 
-    if build_data.build_dir_path.exists() and build_data.build_dir_path.is_dir():
-        print(f"Clean: Removing 'build' directory")
-        ret = safe_rmdir(build_data)
-        if ret: print(f"Clean: 'build' removed successfully.")
-    else:
-        print(f"Clean: {build_data.build_dir_path} does not exist")
+    for path in dirs_to_clean:
+        bd = BuildData(build_data.repo_root, path, build_data.install_prefix, build_data.cmakelists_path, build_data.target_platform)
+        if path.exists() and path.is_dir():
+            print(f"Clean: Removing '{path}'")
+            ret = safe_rmdir(bd)
+            if ret: print(f"Clean: '{path}' removed successfully.")
+        else:
+            print(f"Clean: {path} does not exist")
 
     print("============== Clean Complete ================")
 
@@ -226,9 +229,13 @@ def parse_args() -> argparse.Namespace:
     common_flags.add_argument("--qnx", action="store_true", help="Build QNX packages")
     common_flags.add_argument("--linux", action="store_true", help="Build Linux packages")
     
+    clean_flags = argparse.ArgumentParser(add_help=False)
+    clean_flags.add_argument("--qnx", action="store_true", help="Clean only the QNX build directory")
+    clean_flags.add_argument("--linux", action="store_true", help="Clean only the Linux build directory")
+
     level1_junction = parser.add_subparsers(dest="command", required=True)
     level1_junction.add_parser("all", parents=[common_flags], help="Build and install all targets")
-    level1_junction.add_parser("clean", help="Delete the build directory, but NOT deploy/")
+    level1_junction.add_parser("clean", parents=[clean_flags], help="Delete build directories (both by default), but NOT deploy/")
     command_target = level1_junction.add_parser("target", parents=[common_flags], help="Select specific nodes to build and install")
     command_target.add_argument("targets", nargs="+", help="One or more node target names")
     return parser.parse_args() 
@@ -248,19 +255,27 @@ def main():
         die(str(exc))
 
     args = parse_args()
-    
-    target_platform = "LINUX" if getattr(args, 'linux', False) else "QNX"
-    build_dir_path = repo_root / "build" / target_platform.lower()
+
+    target_platform = "linux" if getattr(args, 'linux', False) else "qnx"
+    build_dir_path = repo_root / "build" / target_platform
     cmakelists_path = repo_root / "CMakeLists.txt"
     install_prefix = repo_root / "deploy"
-    build_data = BuildData(repo_root, build_dir_path, install_prefix, cmakelists_path, target_platform) 
+    build_data = BuildData(repo_root, build_dir_path, install_prefix, cmakelists_path, target_platform)
 
     if args.command == "all":
         build_all(args.jobs, build_data)
     elif args.command == "target":
         build_target(args.targets, args.jobs, build_data)
     elif args.command == "clean":
-        clean(build_data)
+        qnx_flag = getattr(args, 'qnx', False)
+        linux_flag = getattr(args, 'linux', False)
+        if linux_flag and not qnx_flag:
+            dirs_to_clean = [repo_root / "build" / "linux"]
+        elif qnx_flag and not linux_flag:
+            dirs_to_clean = [repo_root / "build" / "qnx"]
+        else:
+            dirs_to_clean = [repo_root / "build" / "linux", repo_root / "build" / "qnx"]
+        clean(dirs_to_clean, build_data)
 
 if __name__ == "__main__":
     main()
