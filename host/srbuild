@@ -125,6 +125,7 @@ def build(targets: Optional[list[str]], build_data: BuildData, jobs: int) -> Non
         jobs (int): number of jobs to run in parallel
     """
     print("============= Building Targets ===============")
+    print(f"Target Platform: {build_data.target_platform}\n")
     jobs_str = f"{jobs}"
     start_time = time.time()
     # Build targets
