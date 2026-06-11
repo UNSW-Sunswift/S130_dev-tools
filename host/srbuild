@@ -250,7 +250,7 @@ def main():
     args = parse_args()
     
     target_platform = "LINUX" if getattr(args, 'linux', False) else "QNX"
-    build_dir_path = repo_root / "build"
+    build_dir_path = repo_root / "build" / target_platform.lower()
     cmakelists_path = repo_root / "CMakeLists.txt"
     install_prefix = repo_root / "deploy"
     build_data = BuildData(repo_root, build_dir_path, install_prefix, cmakelists_path, target_platform) 
