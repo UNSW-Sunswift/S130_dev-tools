@@ -7,7 +7,8 @@ srpkg:
 - Removed pytest checking for src/ and core/.
 
 srbuild:
-- Added `--linux` and `--qnx` flags to  `srbuild` which initialises cmake with qnx toolchain file or doesn't. Defaults to qnx.
+- Added `--linux` and `--qnx` flags to all `srbuild` subcommands which initialises cmake with qnx toolchain file or doesn't. Defaults to qnx. For `srbuild clean` it by default deletes both `build/qnx` and `build/linux`
+- `srbuild` now generates `build/linux` or `build/qnx` instead of just `build`
 - Also refactored to remove globals
 - Updated and added new pyests
 
@@ -80,12 +81,14 @@ srpkg list
 `srbuild` is a wrapper around CMake that simplifies building DDS packages and targets. It must be run from within the repository, but can be used from anywhere within, not necessarily root.
 
 #### Output:
-`srbuild` automatically creates or overwrites root level `build/` and `deploy/` directories. It builds all objects, libraries and binaries into `build/` (don't bother touching this, it's needed for CMake), then installs all runtime files into `deploy/` for easy deployment (use this). By default, it builds using the qnx toolchain file which is hardcoded to live at `SR-Mjolnir/cmake/qnx.toolchain.cmake`.
+`srbuild` automatically creates or overwrites root level `build/[qnx | linux]` and `deploy/` directories. It builds all objects, libraries and binaries into `build/[qnx | linux]` (don't bother touching this, it's needed for CMake), then installs all runtime files into `deploy/` for easy deployment (use this). By default, it builds using the qnx toolchain file which is hardcoded to live at `SR-Mjolnir/cmake/qnx.toolchain.cmake`.
 ```
 SR-Mjolnir/
 ├── cmake/
 │     └── qnx.toolchain.cmake    # QNX toolchain file
 ├── build/                       # CMake-required files
+│     ├── qnx/
+│     └── linux/
 ├── deploy/
 │     ├── bin/                   # Node executables
 │     └── param/                 # Runtime parameter files
@@ -112,7 +115,7 @@ This automatically builds dependencies if required.
 To delete the build directory:
 
 ```bash
-srbuild clean
+srbuild clean [--linux | --qnx]
 ```
 
 #### Parallel jobs:

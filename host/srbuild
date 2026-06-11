@@ -9,9 +9,9 @@
 # 
 # 
 # Usage:
-#   - srbuild all
-#   - srbuild target node1 node2 ...
-#   - srbuild clean
+#   - srbuild all [--qnx | --linux]
+#   - srbuild target node1 node2 ... [--qnx | --linux]
+#   - srbuild clean [--qnx | --linux]
 ###############################################################################
 
 import argparse
