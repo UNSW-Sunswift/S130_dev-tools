@@ -93,9 +93,9 @@ def configure_cmake(build_data: BuildData) -> None:
     if not (build_data.cmakelists_path.exists() and build_data.cmakelists_path.is_file()):
         die("Build: Root CMakeLists.txt does not exist")
     if not (build_data.build_dir_path.exists() and build_data.build_dir_path.is_dir()):
-        print("Build: Root build directory not found, creating build/")
+        print("Build: Root build directory not found, creating build directory")
         try:
-            build_data.build_dir_path.mkdir()
+            build_data.build_dir_path.mkdir(parents=True)
         except Exception as e:
             die(f"Error: Failed to create build directory: {e}")
 
