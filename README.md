@@ -1,4 +1,4 @@
-# S130 Development tools V1.2.0
+# S130 Development tools V1.3.0
 
 ## Version Notes: v1.3.0
 srpkg:
