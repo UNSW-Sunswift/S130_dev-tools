@@ -105,7 +105,7 @@ def fill_cmakelists(paths: PkgPaths, target: str) -> None:
     guard_flag = COMPILER_QNX_FLAG if target == "LINUX" else COMPILER_LINUX_FLAG
     text = f"""if({guard_flag})
     return()
-endif
+endif()
 
 # Per-node info
 set(TARGET_NAME {paths.pkg_name})
