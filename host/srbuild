@@ -49,21 +49,21 @@ def safe_rmdir(path: Path, repo_root: Path) -> bool:
     In case any bugs in error checking happen before. Then deletes specified dir.
     """
     if not path.exists():
-        print("Clean: Path does not exist")
+        print("[srbuild] Clean: Path does not exist")
         return False
 
     if not path.is_dir():
-        print("Clean: Path is not a directory")
+        print("[srbuild] Clean: Path is not a directory")
         return False
 
     if path.is_symlink():
-        print("Clean: Path is a symlink")
+        print("[srbuild] Clean: Path is a symlink")
         return False
 
     try:
         path.relative_to(repo_root)
     except ValueError:
-        print("Clean: Path is not within repository")
+        print("[srbuild] Clean: Path is not within repository")
         return False
 
     if path == repo_root or path == Path("/") or path == repo_root / "src" or path == repo_root / "core":
@@ -86,11 +86,12 @@ def configure_cmake(build_data: BuildData) -> None:
     """
 
     print("============ CMake Initialisation ============")
+    print(f"[srbuild] TARGET PLATFORM: {build_data.target_platform}")
     # CMakeLists.txt at root MUST exist. Makes build dir if does not exist
     if not (build_data.cmakelists_path.exists() and build_data.cmakelists_path.is_file()):
         die("Build: Root CMakeLists.txt does not exist")
     if not (build_data.build_dir_path.exists() and build_data.build_dir_path.is_dir()):
-        print("Build: Root build directory not found, creating build directory")
+        print("[srbuild] Build: Root build directory not found, creating build directory")
         try:
             build_data.build_dir_path.mkdir(parents=True)
         except Exception as e:
@@ -110,7 +111,7 @@ def configure_cmake(build_data: BuildData) -> None:
         cmd.append(f"-DCMAKE_TOOLCHAIN_FILE={build_data.repo_root / Path(QNX_TOOLCHAIN_PATH)}")
         
     try:
-        print("Build: Initialising CMake")
+        print("[srbuild] Build: Initialising CMake")
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError as e:
         die(f"Build: Error configuring CMake: {e}")
@@ -125,18 +126,17 @@ def build(targets: Optional[list[str]], build_data: BuildData, jobs: int) -> Non
         jobs (int): number of jobs to run in parallel
     """
     print("============= Building Targets ===============")
-    print(f"Target Platform: {build_data.target_platform}\n")
     jobs_str = f"{jobs}"
     start_time = time.time()
     # Build targets
     try:
         if targets is None:
-            print("Build: Building all targets")
+            print("[srbuild] Build: Building all targets")
             subprocess.run([
                 "cmake", "--build", str(build_data.build_dir_path), "-j", jobs_str
             ], check=True)
         else:
-            print("Build: Building specified targets")
+            print("[srbuild] Build: Building specified targets")
             # Uhh loop is probably less efficient, but the alternative is messy
             # If someone is using --target, build times probably tiny anyway
             for target in targets:
@@ -148,7 +148,7 @@ def build(targets: Optional[list[str]], build_data: BuildData, jobs: int) -> Non
     
     print("=============== Build Complete =================")
     end_time = time.time()
-    print(f"Build finished in {end_time-start_time:.4f} seconds")
+    print(f"[srbuild] Build finished in {end_time-start_time:.4f} seconds")
 
 def install(targets: Optional[list[str]], build_data: BuildData) -> None:
     """Calls cmake --install <build_dir> to install bins into <install_prefix>
@@ -162,12 +162,12 @@ def install(targets: Optional[list[str]], build_data: BuildData) -> None:
     # Install targets
     try:
         if targets is None:
-            print("Install: Installing all targets")
+            print("[srbuild] Install: Installing all targets")
             subprocess.run([
                 "cmake", "--install", str(build_data.build_dir_path)
             ], check=True)
         else:
-            print("Install: Installing specified targets")
+            print("[srbuild] Install: Installing specified targets")
             for target in targets:
                 subprocess.run([
                     "cmake", "--install", str(build_data.build_dir_path), "--component", target
@@ -183,7 +183,7 @@ def install(targets: Optional[list[str]], build_data: BuildData) -> None:
     
     print("=============== Install Complete =================")
     end_time = time.time()
-    print(f"Install finished in {end_time-start_time:.4f} seconds")
+    print(f"[srbuild] Install finished in {end_time-start_time:.4f} seconds")
 
 def clean(build_data: BuildData) -> None:
     """Deletes the entire build/ directory."""
@@ -194,12 +194,12 @@ def clean(build_data: BuildData) -> None:
         die("Cancelling clean..")
 
     if path.exists() and path.is_dir():
-        print(f"Clean: Removing '{path}'")
+        print(f"[srbuild] Clean: Removing '{path}'")
         ret = safe_rmdir(path, build_data.repo_root)
         if ret:
-            print(f"Clean: '{path}' removed successfully.")
+            print(f"[srbuild] Clean: '{path}' removed successfully.")
     else:
-        print(f"Clean: {path} does not exist")
+        print(f"[srbuild] Clean: {path} does not exist")
 
     print("============== Clean Complete ================")
 
