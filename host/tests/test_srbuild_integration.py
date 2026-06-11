@@ -132,42 +132,22 @@ def test_rejects_unknown_subcommand(configured_repo: Path) -> None:
 # =================================================================================================
 
 def test_clean_cancels_on_no(configured_repo: Path) -> None:
-    """Answering 'n' to the clean prompt should cancel and leave build dirs intact."""
+    """Answering 'n' to the clean prompt should cancel and leave build/ intact."""
     (configured_repo / "build" / "linux").mkdir(parents=True)
     (configured_repo / "build" / "qnx").mkdir(parents=True)
     r = run("clean", cwd=configured_repo, stdin="n\n")
     assert_failure(r)
-    assert (configured_repo / "build" / "linux").exists()
-    assert (configured_repo / "build" / "qnx").exists()
+    assert (configured_repo / "build").exists()
 
-def test_clean_removes_both_by_default(configured_repo: Path) -> None:
-    """Answering 'y' with no flag should remove both build/linux and build/qnx."""
+def test_clean_removes_build_dir(configured_repo: Path) -> None:
+    """Answering 'y' should remove the entire build/ directory."""
     (configured_repo / "build" / "linux").mkdir(parents=True)
     (configured_repo / "build" / "qnx").mkdir(parents=True)
     r = run("clean", cwd=configured_repo, stdin="y\n")
     assert_success(r)
-    assert not (configured_repo / "build" / "linux").exists()
-    assert not (configured_repo / "build" / "qnx").exists()
-
-def test_clean_removes_only_linux(configured_repo: Path) -> None:
-    """--linux flag should remove only build/linux and leave build/qnx intact."""
-    (configured_repo / "build" / "linux").mkdir(parents=True)
-    (configured_repo / "build" / "qnx").mkdir(parents=True)
-    r = run("clean", "--linux", cwd=configured_repo, stdin="y\n")
-    assert_success(r)
-    assert not (configured_repo / "build" / "linux").exists()
-    assert (configured_repo / "build" / "qnx").exists()
-
-def test_clean_removes_only_qnx(configured_repo: Path) -> None:
-    """--qnx flag should remove only build/qnx and leave build/linux intact."""
-    (configured_repo / "build" / "linux").mkdir(parents=True)
-    (configured_repo / "build" / "qnx").mkdir(parents=True)
-    r = run("clean", "--qnx", cwd=configured_repo, stdin="y\n")
-    assert_success(r)
-    assert (configured_repo / "build" / "linux").exists()
-    assert not (configured_repo / "build" / "qnx").exists()
+    assert not (configured_repo / "build").exists()
 
 def test_clean_handles_missing_build(configured_repo: Path) -> None:
-    """Clean should succeed gracefully when neither build/linux nor build/qnx exist."""
+    """Clean should succeed gracefully when build/ does not exist."""
     r = run("clean", cwd=configured_repo, stdin="y\n")
     assert_success(r)

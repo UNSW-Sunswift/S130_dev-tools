@@ -11,7 +11,7 @@
 # Usage:
 #   - srbuild all [--qnx | --linux]
 #   - srbuild target node1 node2 ... [--qnx | --linux]
-#   - srbuild clean [--qnx | --linux]
+#   - srbuild clean
 ###############################################################################
 
 import argparse
@@ -44,32 +44,29 @@ class BuildData:
 # HELPERS
 # =================================================================================================
 
-def safe_rmdir(build_data: BuildData) -> bool:
-    """Absolutely every error check again just to confirm before deletion. 
-    In case any bugs in error checking happen before. Then deletes specified dir
-    Args:
-        build_data (BuildData): build_data.build_dir_path is to be delted
+def safe_rmdir(path: Path, repo_root: Path) -> bool:
+    """Absolutely every error check again just to confirm before deletion.
+    In case any bugs in error checking happen before. Then deletes specified dir.
     """
-    path = build_data.build_dir_path
     if not path.exists():
         print("Clean: Path does not exist")
         return False
-        
+
     if not path.is_dir():
         print("Clean: Path is not a directory")
         return False
-        
+
     if path.is_symlink():
         print("Clean: Path is a symlink")
         return False
 
     try:
-        path.relative_to(build_data.repo_root)
+        path.relative_to(repo_root)
     except ValueError:
         print("Clean: Path is not within repository")
         return False
-    
-    if path == build_data.repo_root or path == "/" or path == build_data.repo_root / "src" or path == build_data.repo_root / "core":
+
+    if path == repo_root or path == Path("/") or path == repo_root / "src" or path == repo_root / "core":
         die("wtf are u doing man")
 
     shutil.rmtree(path)
@@ -188,19 +185,18 @@ def install(targets: Optional[list[str]], build_data: BuildData) -> None:
     print(f"Install finished in {end_time-start_time:.4f} seconds")
 
 def clean(build_data: BuildData) -> None:
-    """Deletes entire build dir"""
+    """Deletes the entire build/ directory."""
     print("============= Cleaning Targets ===============")
-    res = input(f"Would you like to remove build? (y/n): ")
+    path = build_data.repo_root / "build"
+    res = input(f"Would you like to remove {path}? (y/n): ")
     if res.lower() != "y":
         die("Cancelling clean..")
 
-    # nuke the whole build dir
-    path = build_data.build_dir_path.parent
-
     if path.exists() and path.is_dir():
         print(f"Clean: Removing '{path}'")
-        ret = safe_rmdir(build_data)
-        if ret: print(f"Clean: '{path}' removed successfully.")
+        ret = safe_rmdir(path, build_data.repo_root)
+        if ret:
+            print(f"Clean: '{path}' removed successfully.")
     else:
         print(f"Clean: {path} does not exist")
 
@@ -255,7 +251,7 @@ def main():
     target_platform = "linux" if getattr(args, 'linux', False) else "qnx"
     build_dir_path = repo_root / "build" / target_platform
     cmakelists_path = repo_root / "CMakeLists.txt"
-    install_prefix = repo_root / "deploy"
+    install_prefix = repo_root / "deploy" / target_platform
     build_data = BuildData(repo_root, build_dir_path, install_prefix, cmakelists_path, target_platform)
 
     if args.command == "all":
