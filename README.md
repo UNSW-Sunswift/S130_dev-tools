@@ -10,7 +10,7 @@ srbuild:
 - Added `--linux` and `--qnx` flags to all `srbuild` subcommands which initialises cmake with qnx toolchain file or doesn't. Defaults to qnx. For `srbuild clean` it by default deletes both `build/qnx` and `build/linux`
 - `srbuild` now generates `build/linux` or `build/qnx` instead of just `build`
 - Also refactored to remove globals
-- Updated and added new pyests
+- Updated and added new pytests
 
 common_helpers.py:
 - Renamed from srutils.py
