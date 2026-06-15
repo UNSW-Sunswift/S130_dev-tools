@@ -46,10 +46,17 @@ def test_create_basic(repo: Path, src: Path) -> None:
     assert (pkg / "src").is_dir()
     assert (pkg / "src" / "main.cpp").exists()
     assert (pkg / "include").is_dir()
+    assert (pkg / "test").is_dir()
+    assert (pkg / "test" / "my_node_test.cpp").exists()
     assert (pkg / "param").is_dir()
-    assert (pkg / "param" / "my_node_param.toml").exists()
+    assert (pkg / "param" / "my_node_parameters.toml").exists()
     assert (pkg / "CMakeLists.txt").exists()
     assert (pkg / "README.md").exists()
+
+    cmake_text = (pkg / "CMakeLists.txt").read_text()
+    assert "sr_add_gtest(${TARGET_NAME}_test" in cmake_text
+    test_text = (pkg / "test" / "my_node_test.cpp").read_text()
+    assert "#include <gtest/gtest.h>" in test_text
 
 def test_create_rejects_local_duplicate(repo, src):
     run("create", "my_node", cwd=src)

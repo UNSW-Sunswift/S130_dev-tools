@@ -13,6 +13,7 @@
 #     .srpkg
 #     src/
 #     include/
+#     test/
 #     param/
 #     CMakeLists.txt
 #     README.md
@@ -48,14 +49,16 @@ REPO_ROOT = Path()
 NESTED_DIRS = {
     "src": "src",
     "include": "include",
+    "test": "test",
     "param": "param",
 }
 FILES = {
     "metadata": ".srpkg",
     "make": "CMakeLists.txt",
     "readme": "README.md",
-    "param": "param/{pkg_name}_param.toml",
-    "main": "src/main.cpp"
+    "param": "param/{pkg_name}_parameters.toml",
+    "main": "src/main.cpp",
+    "test": "test/{pkg_name}_test.cpp"
 }
 
 CLI_ARGS = {
@@ -99,7 +102,9 @@ Topic | Topic Type | Description
 /domain/subsystem/topic|`Topic Type`|BMS Voltage
 
 ## Parameters
-Under construction!
+This node loads safe defaults from `param/{paths.pkg_name}_parameters.toml`.
+Only parameters declared mutable in that file may be changed at runtime through
+the DDS-native parameter service.
 
 ## Contributors
 Written by `Your name here` | `Your zID here`"""
@@ -128,23 +133,33 @@ target_include_directories(${{TARGET_NAME}} PRIVATE ${{INCLUDE_DIRS}})
 target_link_libraries(${{TARGET_NAME}} PRIVATE ${{LIBS}})
 
 # Install time
-sr_install_node(${{TARGET_NAME}} param/${{TARGET_NAME}}_param.toml)
+sr_install_node(${{TARGET_NAME}} param/${{TARGET_NAME}}_parameters.toml)
+
+if(BUILD_TESTING AND SR_TARGET_LINUX)
+    sr_add_gtest(${{TARGET_NAME}}_test test/${{TARGET_NAME}}_test.cpp)
+    target_include_directories(${{TARGET_NAME}}_test PRIVATE ${{INCLUDE_DIRS}})
+    target_link_libraries(${{TARGET_NAME}}_test PRIVATE ${{LIBS}})
+    set_tests_properties(${{TARGET_NAME}}_test PROPERTIES TIMEOUT 20)
+endif()
 """
     with (paths.abs_pkg_path / FILES["make"]).open("w") as file:
         file.write(text)
 
 def fill_param(paths: PkgPaths) -> None:
-    text = f"""# {paths.pkg_name}_param.toml
-# Parameter file for {paths.pkg_name}
-# All parameters are optional. Missing keys fall back to declared defaults in the node.
-# Undeclared parameters are ignored
+    text = f"""schema_version = 1
+node = "{paths.pkg_name}"
+fallback = "Use declared safe defaults when no external parameter request is accepted."
 
-[params]
-# example_string = "hello"
-# example_int    = 42
-# example_float  = 3.14
-# example_bool   = true
-
+[[parameters]]
+name = "example_period_ms"
+type = "int64"
+default = 1000
+mutable = false
+min = 100
+max = 10000
+unit = "ms"
+description = "Example parameter descriptor; replace before committing a production node."
+fallback = "Use the declared safe default."
 """
     with (paths.abs_pkg_path / FILES["param"].format(pkg_name=paths.pkg_name)).open("w") as file:
         file.write(text)
@@ -160,6 +175,23 @@ int main(int argc, char* argv[]) {{
 
 """
     with (paths.abs_pkg_path / FILES["main"]).open("w") as file:
+        file.write(text)
+
+def gtest_suite_name(pkg_name: str) -> str:
+    name = "".join(part.capitalize() for part in pkg_name.split("_") if part)
+    if not name or name[0].isdigit():
+        name = f"Pkg{name}"
+    return f"{name}Test"
+
+def fill_test(paths: PkgPaths) -> None:
+    text = f"""#include <gtest/gtest.h>
+
+TEST({gtest_suite_name(paths.pkg_name)}, StartsFromGeneratedTemplate) {{
+    SUCCEED();
+}}
+
+"""
+    with (paths.abs_pkg_path / FILES["test"].format(pkg_name=paths.pkg_name)).open("w") as file:
         file.write(text)
 
 def pkg_exist_elsewhere(paths: PkgPaths) -> tuple[bool, Optional[Path]]:
@@ -282,6 +314,7 @@ def pkg_create(paths: PkgPaths) -> None:
         fill_cmakelists(paths)
         fill_param(paths)
         fill_main(paths)
+        fill_test(paths)
     except Exception as e:
         if paths.abs_pkg_path.exists():
             safe_rmdir(paths)
