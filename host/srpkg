@@ -54,7 +54,7 @@ FILES = {
     "metadata": ".srpkg",
     "make": "CMakeLists.txt",
     "readme": "README.md",
-    "param": "param/{pkg_name}_param.toml",
+    "param": "param/{pkg_name}_parameters.toml",
     "main": "src/main.cpp"
 }
 
@@ -99,7 +99,9 @@ Topic | Topic Type | Description
 /domain/subsystem/topic|`Topic Type`|BMS Voltage
 
 ## Parameters
-Under construction!
+This node loads safe defaults from `param/{paths.pkg_name}_parameters.toml`.
+Only parameters declared mutable in that file may be changed at runtime through
+the DDS-native parameter service.
 
 ## Contributors
 Written by `Your name here` | `Your zID here`"""
@@ -128,23 +130,26 @@ target_include_directories(${{TARGET_NAME}} PRIVATE ${{INCLUDE_DIRS}})
 target_link_libraries(${{TARGET_NAME}} PRIVATE ${{LIBS}})
 
 # Install time
-sr_install_node(${{TARGET_NAME}} param/${{TARGET_NAME}}_param.toml)
+sr_install_node(${{TARGET_NAME}} param/${{TARGET_NAME}}_parameters.toml)
 """
     with (paths.abs_pkg_path / FILES["make"]).open("w") as file:
         file.write(text)
 
 def fill_param(paths: PkgPaths) -> None:
-    text = f"""# {paths.pkg_name}_param.toml
-# Parameter file for {paths.pkg_name}
-# All parameters are optional. Missing keys fall back to declared defaults in the node.
-# Undeclared parameters are ignored
+    text = f"""schema_version = 1
+node = "{paths.pkg_name}"
+fallback = "Use declared safe defaults when no external parameter request is accepted."
 
-[params]
-# example_string = "hello"
-# example_int    = 42
-# example_float  = 3.14
-# example_bool   = true
-
+[[parameters]]
+name = "example_period_ms"
+type = "int64"
+default = 1000
+mutable = false
+min = 100
+max = 10000
+unit = "ms"
+description = "Example parameter descriptor; replace before committing a production node."
+fallback = "Use the declared safe default."
 """
     with (paths.abs_pkg_path / FILES["param"].format(pkg_name=paths.pkg_name)).open("w") as file:
         file.write(text)

@@ -47,7 +47,7 @@ def test_create_basic(repo: Path, src: Path) -> None:
     assert (pkg / "src" / "main.cpp").exists()
     assert (pkg / "include").is_dir()
     assert (pkg / "param").is_dir()
-    assert (pkg / "param" / "my_node_param.toml").exists()
+    assert (pkg / "param" / "my_node_parameters.toml").exists()
     assert (pkg / "CMakeLists.txt").exists()
     assert (pkg / "README.md").exists()
 
