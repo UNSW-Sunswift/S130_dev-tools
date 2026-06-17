@@ -1,11 +1,9 @@
 # S130 Development tools V1.2.0
 
-## Version Notes: v1.2.0
-- Cleaned up repo root checks from Henry's merge
-- Removed repo root checks from `srlaunch`.
-- Added `host/srutils.py` for common logic between `srpkg` and `srbuild`
-- Added toml param file generation and autofilling, as well as autofilling a main file template in `srpkg`
-- Added integration tests for `srpkg` and `srlaunch`
+## Version Notes: v1.3.0 
+- Upgraded `srpkg` to V3.1 with decoupled logic/node architecture and native unit test generation.
+- Added `srtest` testing engine with native coverage, AddressSanitizer (ASan), and CI/CD XML/JSON logging.
+- Upgraded `srbuild` with improved repository root validation and safer clean removal.
 
 ## Introduction
 This repository contains high-level development tools for Sunswift embedded and DDS projects. It is separated into host/ and target/. host/ contains the dev tools we are using during development time on our host machines. target/ contains scripts that should be run on the target (NVIDIA Drive THOR computer). It is intended to be a submodule in the SR-Mjolnir repository.
@@ -16,6 +14,7 @@ It includes:
 - `srpkg`: DDS package creation and management tool
 - `srbuild`: Build tool for compiling and deploying DDS packages
 - `srlaunch`: Tool for starting nodes
+- `srtest`: Complete dynamic testing engine for executing unit tests, memory checks, and code coverage
 - `srdds`: (WORK IN PROGRESS) Tool for managing active nodes
 
 ## Getting Started
@@ -43,13 +42,21 @@ This will create a new directory with the following structure:
 
 ```
 <package_name>/
-├── .srpkg              # Package metadata file
-├── src/                # Source files (.cpp)
-├── include/            # Header files (.hpp)
-├── param/              # Parameter files (JSON)
-├── param/param.json    # Default parameter template
-├── CMakeLists.txt      # Build configuration template
-└── README.md           # Package documentation
+├── .srpkg                                # Package metadata file
+├── CMakeLists.txt                        # Build configuration template
+├── README.md                             # Package documentation
+├── include/
+│   ├── <package_name>_logic.hpp          # Math/Logic definitions
+│   └── <package_name>_node.hpp           # DDS Node definitions
+├── param/
+│   └── <package_name>_param.toml         # Default TOML parameter template
+├── src/
+│   ├── <package_name>_logic.cpp          # Math/Logic implementation
+│   ├── <package_name>_node.cpp           # DDS Node implementation
+│   └── main.cpp                          # Executable entry point
+└── test/
+    └── unit/
+        └── test_<package_name>_unit.cpp  # GoogleTest suite block
 ```
 
 The package will be created in your current working directory.
@@ -119,6 +126,30 @@ cd deploy/tools
 ./srlaunch all
 ./srlaunch target node1 node2
 ```
+
+### 5. Using srtest
+`srtest` is a zero-config testing engine that discovers compiled unit tests, calculates exact line and function coverage, and monitors runtime memory safety using AddressSanitizer (ASan).
+
+Ensure you have run `srbuild all` (with testing enabled in CMake) before executing tests.
+
+#### Running tests:
+```bash
+# Runs all available test executables 
+srtest all
+
+# Run everything except specific nodes
+srtest all --except tpms motor
+
+# Run only the specific nodes you are working on
+srtest node pedal_box
+
+# Run only test cases matching a specific name pattern
+srtest -f "*Parse*" node pedal_box
+
+# Export structured XML/JSON reports to a target directory
+srtest -o build/test-results all
+```
+
 Then just `Ctrl-C` to shut down all nodes gracefully. It's that easy guys.
 ## Example Workflow
 
@@ -132,16 +163,21 @@ Then just `Ctrl-C` to shut down all nodes gracefully. It's that easy guys.
 
 3. Fill out the template CMakeLists.txt
 
-3. Add `add_subdirectory(relative/path/to/my_dds_node)` to src/CMakeLists.txt to enable the build
+4. Add `add_subdirectory(relative/path/to/my_dds_node)` to src/CMakeLists.txt to enable the build
 
-4. Build the package:
+5. Build the package and test suite:
    ```bash
    srbuild target my_dds_node
    # or
    srbuild all
    ```
 
-5. Launch the node:
+6. Verify your logic and memory safety: 
+   ```bash 
+   srtest node my_dds_node
+   ```
+
+7. Launch the node:
    ```bash
    # in deploy/tools
    ./srlaunch target my_dds_node
@@ -153,9 +189,11 @@ Then just `Ctrl-C` to shut down all nodes gracefully. It's that easy guys.
 - Both tools must be run from within the SR-Mjolnir repository
 - `srpkg` creates packages in the current working directory
 - `srbuild` operates on the entire repository build system
+- `srtest` discovers and runs test binaries from the build directory
 - `srlaunch` is used from the deploy directory
 - `srdds` is currently work in progress
 
 ## Contributors
 Ryan Wong || z5417983
 Henry Jiang || z5416365
+Vipul Kumar Chiluvery || z5476881
