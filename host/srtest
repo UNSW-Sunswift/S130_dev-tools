@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+
+###############################################################################
+# Sunswift High Level Test Runner
+# Version: V1.1
+# Date: 17/06/2026
+# Author: Vipul Chiluvery
+#
+# Dedicated test tool to discover, target, and run GoogleTest binary blocks.
+# 
+# Usage:
+#   - srtest all
+#   - srtest node node_name1 node_name2 ...
+###############################################################################
+
+import argparse
+import subprocess
+import time
+import os
+from pathlib import Path
+from srutils import resolve_repo_root, validate_repo_root, die
+
+CWD = Path.cwd().resolve()
+REPO_ROOT = Path()
+BUILD_DIR_PATH = Path()
+
+# Global blocklist for legacy network-bound binaries that hang or fail without network daemons
+IGNORE_LIST = {
+    "test_can0_gateway",
+}
+
+def execute_binaries(test_binaries: list[Path]) -> None:
+    if not test_binaries:
+        print("No verification test binaries matched the requested target scopes.")
+        return
+
+    passed = 0
+    failed = 0
+    start_time = time.time()
+
+    for binary in test_binaries:
+        print(f"Running: {binary.name.ljust(30)} ... ", end="", flush=True)
+        try:
+            res = subprocess.run([str(binary)], capture_output=True, text=True, timeout=30)
+            if res.returncode == 0:
+                print("PASSED")
+                passed += 1
+            else:
+                print("FAILED")
+                print("\n" + "="*50)
+                print(f"OUTPUT FOR {binary.name}:")
+                print(res.stdout)
+                if res.stderr:
+                    print(res.stderr)
+                print("="*50 + "\n")
+                failed += 1
+        except subprocess.TimeoutExpired:
+            print("FAILED (Timeout)")
+            failed += 1
+        except Exception as e:
+            print(f"FAILED ({e})")
+            failed += 1
+
+    end_time = time.time()
+    print("=============== Test Summary ===============")
+    print(f"Total Tests : {passed + failed}")
+    print(f"Passed      : {passed}")
+    print(f"Failed      : {failed}")
+    print(f"Time        : {end_time - start_time:.4f} seconds")
+
+    if failed > 0:
+        die("Some tests failed.")
+
+def run_all_tests() -> None:
+    print("============= Running All Tests ===============")
+    test_binaries = []
+    for p in BUILD_DIR_PATH.rglob("test_*"):
+        # Check that it's a file, executable, not a suffix, and NOT in the ignore list
+        if p.is_file() and os.access(p, os.X_OK) and p.suffix == "" and p.name not in IGNORE_LIST:
+            test_binaries.append(p)
+    execute_binaries(test_binaries)
+
+def run_node_tests(nodes: list[str]) -> None:
+    print(f"============= Running Targeted Node Tests =============")
+    test_binaries = []
+    
+    # Map the node name safely to its standard test executable names (e.g., tpms -> test_tpms)
+    target_binary_names = {f"test_{node}" for node in nodes}
+    
+    for p in BUILD_DIR_PATH.rglob("test_*"):
+        if p.is_file() and os.access(p, os.X_OK) and p.suffix == "" and p.name in target_binary_names:
+            if p.name in IGNORE_LIST:
+                print(f"Skipping ignored target: {p.name}")
+                continue
+            test_binaries.append(p)
+            
+    execute_binaries(test_binaries)
+
+def main():
+    parser = argparse.ArgumentParser(description="Sunswift dynamic testing execution framework")
+    level1_junction = parser.add_subparsers(dest="command", required=True)
+    
+    level1_junction.add_parser("all", help="Discover and execute every compiled test binary")
+    
+    command_node = level1_junction.add_parser("node", help="Run tests for specific nodes")
+    command_node.add_argument("nodes", nargs="+", help="Name of the node package (e.g., tpms pedal_box)")
+    
+    args = parser.parse_args()
+
+    global REPO_ROOT, BUILD_DIR_PATH
+    try:
+        REPO_ROOT = resolve_repo_root(CWD)
+        validate_repo_root(REPO_ROOT)
+    except Exception as exc:
+        die(str(exc))
+        
+    BUILD_DIR_PATH = REPO_ROOT / "build"
+    if not BUILD_DIR_PATH.exists():
+        die("Build environment missing. Run 'srbuild all' before initiating tests.")
+
+    if args.command == "all":
+        run_all_tests()
+    elif args.command == "node":
+        run_node_tests(args.nodes)
+
+if __name__ == "__main__":
+    main()
