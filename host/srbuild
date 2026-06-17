@@ -2,16 +2,16 @@
 
 ###############################################################################
 # Sunswift High Level build tool
-# Version: V2.1
+# Version: V2.2
 # Date: 7/01/2026
-# Author: Ryan Wong
+# Author: Ryan Wong (Updated)
 #
-# Wrapper around CMake to allow you to intuitively build and install all, one, or some targets
-# 
+# Wrapper around CMake to allow you to intuitively build, install, and test
 # 
 # Usage:
 #   - srbuild all
 #   - srbuild target node1 node2 ...
+#   - srbuild test
 #   - srbuild clean
 ###############################################################################
 
@@ -19,6 +19,7 @@ import argparse
 import subprocess
 import time
 import shutil
+import os
 from typing import Optional
 from pathlib import Path
 from srutils import resolve_repo_root, validate_repo_root, die
@@ -115,8 +116,6 @@ def build(targets: Optional[list[str]], jobs: int) -> None:
             ], check=True)
         else:
             print("Build: Building specified targets")
-            # Uhh loop is probably less efficient, but the alternative is messy
-            # If someone is using --target, build times probably tiny anyway
             for target in targets:
                 subprocess.run([
                     "cmake", "--build", str(BUILD_DIR_PATH), "--target", target, "-j", jobs_str
@@ -174,6 +173,57 @@ def clean() -> None:
 
     print("============== Clean Complete ================")
 
+def run_tests() -> None:
+    """Finds and executes all GTest binaries manually."""
+    print("============= Running Tests ===============")
+    if not BUILD_DIR_PATH.exists():
+        die("Build directory not found. Please run 'srbuild all' first.")
+    test_binaries = []
+    for p in BUILD_DIR_PATH.rglob("test_*"):
+        if p.is_file() and os.access(p, os.X_OK) and p.suffix == "":
+            test_binaries.append(p)
+
+    if not test_binaries:
+        print("No test binaries found. Did you build with tests enabled?")
+        return
+
+    passed = 0
+    failed = 0
+    start_time = time.time()
+
+    for binary in test_binaries:
+        print(f"Running: {binary.name.ljust(30)} ... ", end="", flush=True)
+        try:
+            res = subprocess.run([str(binary)], capture_output=True, text=True, timeout=30)
+            if res.returncode == 0:
+                print("PASSED")
+                passed += 1
+            else:
+                print("FAILED")
+                print("\n" + "="*50)
+                print(f"OUTPUT FOR {binary.name}:")
+                print(res.stdout)
+                if res.stderr:
+                    print(res.stderr)
+                print("="*50 + "\n")
+                failed += 1
+        except subprocess.TimeoutExpired:
+            print("FAILED (Timeout)")
+            failed += 1
+        except Exception as e:
+            print(f"FAILED ({e})")
+            failed += 1
+
+    end_time = time.time()
+    print("=============== Test Summary ===============")
+    print(f"Total Tests : {passed + failed}")
+    print(f"Passed      : {passed}")
+    print(f"Failed      : {failed}")
+    print(f"Time        : {end_time - start_time:.4f} seconds")
+
+    if failed > 0:
+        die("Some tests failed.")
+
 def build_all(jobs: int) -> None:
     """Wrapper combining all 3 helpers"""
     configure_cmake()
@@ -203,6 +253,7 @@ def main():
     level1_junction = parser.add_subparsers(dest="command", required=True)
     command_all = level1_junction.add_parser("all", parents=[common_flags], help="Build and install all targets")
     command_clean = level1_junction.add_parser("clean", help="Delete the build directory, but NOT deploy/")
+    command_test = level1_junction.add_parser("test", help="Discover and run all unit test binaries")
     command_target = level1_junction.add_parser("target", parents=[common_flags], help="Select specific nodes to build and install")
     command_target.add_argument("targets", nargs="+", help="One or more node target names")
     args = parser.parse_args() 
@@ -231,7 +282,8 @@ def main():
         build_target(args.targets, args.jobs)
     elif args.command == "clean":
         clean()
+    elif args.command == "test":
+        run_tests()
 
 if __name__ == "__main__":
     main()
-    

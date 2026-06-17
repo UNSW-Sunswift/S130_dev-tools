@@ -49,13 +49,19 @@ NESTED_DIRS = {
     "src": "src",
     "include": "include",
     "param": "param",
+    "test_unit": "test/unit"
 }
 FILES = {
     "metadata": ".srpkg",
     "make": "CMakeLists.txt",
     "readme": "README.md",
     "param": "param/{pkg_name}_param.toml",
-    "main": "src/main.cpp"
+    "main": "src/main.cpp",
+    "logic_hpp": "include/{pkg_name}_logic.hpp",
+    "logic_cpp": "src/{pkg_name}_logic.cpp",
+    "node_hpp": "include/{pkg_name}_node.hpp",
+    "node_cpp": "src/{pkg_name}_node.cpp",
+    "test_cpp": "test/unit/test_{pkg_name}_unit.cpp"
 }
 
 CLI_ARGS = {
@@ -79,6 +85,77 @@ def dir_size(path: Path) -> int:
         for p in path.rglob("*")
         if p.is_file()
     )
+
+#POC HELPERS TEMP
+
+def fill_logic_hpp(paths: PkgPaths) -> None:
+    class_name = "".join(word.capitalize() for word in paths.pkg_name.split("_")) + "Logic"
+    text = f"""#pragma once
+
+class {class_name} {{
+public:
+    // Write your pure math and logic functions here
+    int sample_logic_function(int input);
+}};
+"""
+    with (paths.abs_pkg_path / FILES["logic_hpp"].format(pkg_name=paths.pkg_name)).open("w") as file:
+        file.write(text)
+
+def fill_logic_cpp(paths: PkgPaths) -> None:
+    class_name = "".join(word.capitalize() for word in paths.pkg_name.split("_")) + "Logic"
+    text = f"""#include "{paths.pkg_name}_logic.hpp"
+
+int {class_name}::sample_logic_function(int input) {{
+    // Implement logic here (Zero DDS networking allowed)
+    if (input > 10) return 1;
+    return 0;
+}}
+"""
+    with (paths.abs_pkg_path / FILES["logic_cpp"].format(pkg_name=paths.pkg_name)).open("w") as file:
+        file.write(text)
+
+def fill_node_hpp(paths: PkgPaths) -> None:
+    class_name = "".join(word.capitalize() for word in paths.pkg_name.split("_")) + "Node"
+    text = f"""#pragma once
+// #include "sr_node/sr_node.hpp" // Adjust path to your base SRNode class
+#include "{paths.pkg_name}_logic.hpp"
+
+class {class_name} {{ // Make sure to inherit from SRNode
+public:
+    {class_name}();
+}};
+"""
+    with (paths.abs_pkg_path / FILES["node_hpp"].format(pkg_name=paths.pkg_name)).open("w") as file:
+        file.write(text)
+
+def fill_node_cpp(paths: PkgPaths) -> None:
+    class_name = "".join(word.capitalize() for word in paths.pkg_name.split("_")) + "Node"
+    text = f"""#include "{paths.pkg_name}_node.hpp"
+
+{class_name}::{class_name}() {{
+    // Initialize SRNode, publishers, and subscribers here
+}}
+"""
+    with (paths.abs_pkg_path / FILES["node_cpp"].format(pkg_name=paths.pkg_name)).open("w") as file:
+        file.write(text)
+
+def fill_test_cpp(paths: PkgPaths) -> None:
+    class_name = "".join(word.capitalize() for word in paths.pkg_name.split("_")) + "Logic"
+    text = f"""#include <gtest/gtest.h>
+#include "{paths.pkg_name}_logic.hpp"
+
+TEST({class_name}Test, SampleBranchTest) {{
+    {class_name} logic;
+    
+    // Test your logic branches without the network
+    EXPECT_EQ(logic.sample_logic_function(15), 1);
+    EXPECT_EQ(logic.sample_logic_function(5), 0);
+}}
+"""
+    with (paths.abs_pkg_path / FILES["test_cpp"].format(pkg_name=paths.pkg_name)).open("w") as file:
+        file.write(text)
+    
+#POC HELPERS TEMP ENDED
 
 def fill_readme(paths: PkgPaths) -> None:
     text = f"""# {paths.pkg_name} DDS Package
@@ -109,29 +186,54 @@ Written by `Your name here` | `Your zID here`"""
 def fill_cmakelists(paths: PkgPaths) -> None:
     text = f"""# Per-node info
 set(TARGET_NAME {paths.pkg_name})
+
+#Build the logic class 
+add_library(${{TARGET_NAME}}_logic src/${{TARGET_NAME}}_logic.cpp)
+target_include_directories(${{TARGET_NAME}}_logic PUBLIC include)
+
+#Build the DDS node
 set(SOURCES 
     src/main.cpp
-    # Add your sources here
+    src/${{TARGET_NAME}}_node.cpp
 )
-set(INCLUDE_DIRS
-    include
-)
-set (LIBS 
+add_executable(${{TARGET_NAME}} ${{SOURCES}})
+
+target_include_directories(${{TARGET_NAME}} PRIVATE include)
+target_link_libraries(${{TARGET_NAME}} PRIVATE 
     sr_node
-    # add your type libraries here
-    # add other dependencies here
+    std_types
+    ${{TARGET_NAME}}_logic
 )
 
-# Compile and link
-add_executable(${{TARGET_NAME}} ${{SOURCES}})
-target_include_directories(${{TARGET_NAME}} PRIVATE ${{INCLUDE_DIRS}})
-target_link_libraries(${{TARGET_NAME}} PRIVATE ${{LIBS}})
+# Build the unit test
+if(BUILD_TESTING)
+    add_executable(test_${{TARGET_NAME}} test/unit/test_${{TARGET_NAME}}_unit.cpp)
+    
+    target_link_libraries(test_${{TARGET_NAME}} PRIVATE 
+        ${{TARGET_NAME}}_logic 
+        GTest::gtest_main
+    )
+
+    include(GoogleTest)
+    gtest_discover_tests(test_${{TARGET_NAME}})
+endif()
 
 # Install time
-sr_install_node(${{TARGET_NAME}} param/${{TARGET_NAME}}_param.toml)
+install(
+    TARGETS ${{TARGET_NAME}}
+    RUNTIME DESTINATION bin
+    COMPONENT ${{TARGET_NAME}}
+)
+
+install(
+    FILES param/${{TARGET_NAME}}_param.toml
+    DESTINATION param
+    COMPONENT ${{TARGET_NAME}}
+)
 """
     with (paths.abs_pkg_path / FILES["make"]).open("w") as file:
         file.write(text)
+
 
 def fill_param(paths: PkgPaths) -> None:
     text = f"""# {paths.pkg_name}_param.toml
@@ -150,14 +252,13 @@ def fill_param(paths: PkgPaths) -> None:
         file.write(text)
 
 def fill_main(paths: PkgPaths) -> None:
-    text = f"""// #include "my_node.hpp" TODO: change to your node
+    text = f"""#include "{paths.pkg_name}_node.hpp"
 
 int main(int argc, char* argv[]) {{
     // TODO: initialise SRNode
     // TODO: Spin SRNode and catch exceptions
     return 0;
 }}
-
 """
     with (paths.abs_pkg_path / FILES["main"]).open("w") as file:
         file.write(text)
@@ -248,7 +349,8 @@ def mkdir_package(paths: PkgPaths) -> None:
     """Actually makes the directory structure"""
     paths.abs_pkg_path.mkdir()
     for dir in NESTED_DIRS.values():
-        (paths.abs_pkg_path / dir).mkdir()
+        # Added parents=True so test/unit creates both test/ and test/unit/
+        (paths.abs_pkg_path / dir).mkdir(parents=True, exist_ok=True)
     for file in FILES.values():
         new_file = file
         if "{pkg_name}" in file:
@@ -282,6 +384,12 @@ def pkg_create(paths: PkgPaths) -> None:
         fill_cmakelists(paths)
         fill_param(paths)
         fill_main(paths)
+        #NEW POC files to support unit tests
+        fill_logic_hpp(paths)
+        fill_logic_cpp(paths)
+        fill_node_hpp(paths)
+        fill_node_cpp(paths)
+        fill_test_cpp(paths)
     except Exception as e:
         if paths.abs_pkg_path.exists():
             safe_rmdir(paths)
