@@ -221,8 +221,9 @@ def parse_args() -> argparse.Namespace:
     command_info = level1_junction.add_parser("info")
     level1_junction.add_parser("list")
     command_create.add_argument("name", help="Name of package to create (snake_case)")
-    command_create.add_argument("--linux", action="store_true", help="Package to target Linux")
-    command_create.add_argument("--qnx", action="store_true", help="Package to target QNX")
+    target_group = command_create.add_mutually_exclusive_group()
+    target_group.add_argument("--linux", action="store_true", help="Package to target Linux")
+    target_group.add_argument("--qnx", action="store_true", help="Package to target QNX")
     command_info.add_argument("name", help="Name of package to get info on")
 
     return root_parser.parse_args()
