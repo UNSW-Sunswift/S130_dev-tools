@@ -223,9 +223,10 @@ def parse_args() -> argparse.Namespace:
 
     common_flags = argparse.ArgumentParser(add_help=False)
     common_flags.add_argument("--jobs", "-j", default=8, type=int, help="Number of parallel jobs Make runs. Default=8")
-    common_flags.add_argument("--qnx", action="store_true", help="Build QNX packages")
-    common_flags.add_argument("--linux", action="store_true", help="Build Linux packages")
-    
+    os_target_flags = common_flags.add_mutually_exclusive_group()
+    os_target_flags.add_argument("--qnx", action="store_true", help="Build QNX packages")
+    os_target_flags.add_argument("--linux", action="store_true", help="Build Linux packages")
+
     level1_junction = parser.add_subparsers(dest="command", required=True)
     level1_junction.add_parser("all", parents=[common_flags], help="Build and install all targets")
     level1_junction.add_parser("clean", help="Delete build directories (both by default), but NOT deploy/")

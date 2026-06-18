@@ -69,6 +69,23 @@ def test_create_rejects_outside_repo(repo: Path) -> None:
     r = run("create", "my_node", cwd=repo.parent)
     assert r.returncode != 0
 
+def test_reject_not_in_src(repo: Path) -> None:
+    """Must fail when trying to srpkg create not in src/"""
+    r = run("create", "my_node", cwd=repo)
+    assert r.returncode != 0
+    
+def test_reject_no_src_in_root(repo: Path) -> None:
+    """Reject creation when no src/ directory"""
+    (repo / "src").rmdir()
+    r = run("create", "my_node", cwd=repo)
+    assert r.returncode != 0
+
+def test_reject_no_core_in_root(repo: Path) -> None:
+    """Reject creation when no core/ directory"""
+    (repo / "core").rmdir()
+    r = run("create", "my_node", cwd=repo)
+    assert r.returncode != 0
+
 def test_create_rejects_bad_name(src: Path) -> None:
     for bad in ["MyNode", "my-node", "my node", "my.node"]:
         r = run("create", bad, cwd=src)

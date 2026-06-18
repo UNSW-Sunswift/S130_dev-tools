@@ -2,23 +2,21 @@
 
 ## Version Notes: v1.3.0
 srpkg:
-- Added `--linux` and `--qnx` flags to `srpkg create` which adds a conditional compile statement to the top of the CMakeLists.txt. Defaults to qnx.
+- Added `--linux` and `--qnx` flags to `srpkg create` which adds a conditional compile statement to the top of the CMakeLists.txt. Defaults to qnx. The compiler cache variable is set in the toolchain file in SR-Mjolnir.
 - Refactored to remove ugly globals and update docstrings
-- Removed pytest checking for src/ and core/.
 
 srbuild:
-- Added `--linux` and `--qnx` flags to all `srbuild` subcommands which initialises cmake with qnx toolchain file or doesn't. Defaults to qnx. For `srbuild clean` it by default deletes both `build/qnx` and `build/linux`
+- Added `--linux` and `--qnx` flags to all `srbuild` subcommands which initialises cmake with qnx toolchain file or doesn't. Defaults to qnx. For `srbuild clean` it deletes both `build/qnx` and `build/linux`
 - `srbuild` now generates `build/linux` or `build/qnx` instead of just `build`
 - Also refactored to remove globals
 - Updated and added new pytests
 
 common_helpers.py:
 - Renamed from srutils.py
-- Removed src/ and core/ checks in repo root for srpkg so all you need to run srpkg is to be in a git repo with `.sunswift-evsn` in the root
 
 
 ## Introduction
-This repository contains high-level development tools for Sunswift embedded and DDS projects. It is separated into host/ and target/. host/ contains the dev tools we are using during development time on our host machines. target/ contains scripts that should be run on the target. It is intended to be a submodule in the SR-Mjolnir repository.
+This repository contains high-level development tools for Sunswift embedded and DDS projects. It is separated into host/ and target/. host/ contains the dev tools we are using during development time on our host machines. target/ contains scripts that should be run on the target. It is intended to be a submodule in the SR-Mjolnir repository. Because of this, `srbuild` and `srpkg` are tightly coupled to SR-Mjolnir. If future maintainers want to generalise this tool, please change the logic which verifies/depends on repository structure and build/CMakeLists.txt layout.
 
 > **TARGET/SRLAUNCH IS NOW DEPRECATED AS WE WILL USE QNX'S OWN PROCESS MANAGEMENT TOOL**
 
@@ -53,14 +51,14 @@ This will create a new directory with the following structure:
 
 ```
 <package_name>/
-├── .srpkg              # Package metadata file
-├── src/                # Source files (.cpp)
-├── include/            # Header files (.hpp)
-├── test/               # Unit tests
-├── param/              # Parameter files
-├── param/param.toml    # Default parameter template
-├── CMakeLists.txt      # Build configuration template
-└── README.md           # Package documentation
+├── .srpkg                             # Package metadata file
+├── src/                               # Source files (.cpp)
+├── include/                           # Header files (.hpp)
+├── test/                              # Unit tests
+├── param/                             # Parameter files
+├── param/<package_name>_param.toml    # Default parameter template
+├── CMakeLists.txt                     # Build configuration template
+└── README.md                          # Package documentation
 ```
 
 The package will be created in your **current working directory**. Packages default to QNX as the build target, but you can specify `--linux` instead. Technically `--qnx` is redundant, but for clarity's sake it's there.
@@ -81,7 +79,7 @@ srpkg list
 `srbuild` is a wrapper around CMake that simplifies building DDS packages and targets. It must be run from within the repository, but can be used from anywhere within, not necessarily root.
 
 #### Output:
-`srbuild` automatically creates or overwrites root level `build/[qnx | linux]` and `deploy/` directories. It builds all objects, libraries and binaries into `build/[qnx | linux]` (don't bother touching this, it's needed for CMake), then installs all runtime files into `deploy/` for easy deployment (use this). By default, it builds using the qnx toolchain file which is hardcoded to live at `SR-Mjolnir/cmake/qnx.toolchain.cmake`.
+`srbuild` automatically creates or overwrites root level `build/[qnx | linux]` and `deploy/[qnx | linux]` directories. It builds all objects, libraries and binaries into `build/[qnx | linux]` (don't bother touching this, it's needed for CMake), then installs all runtime files into `deploy/[qnx | linux]` for easy deployment (use this). By default, it builds using the qnx toolchain file which is hardcoded to live at `SR-Mjolnir/cmake/qnx.toolchain.cmake`.
 ```
 SR-Mjolnir/
 ├── cmake/
@@ -90,8 +88,12 @@ SR-Mjolnir/
 │     ├── qnx/
 │     └── linux/
 ├── deploy/
-│     ├── bin/                   # Node executables
-│     └── param/                 # Runtime parameter files
+│     ├── qnx/
+│     │     ├── bin/
+│     │     └── param/
+│     └── linux/
+│           ├── bin/
+│           └── param/
 └── ...
 ```
 #### Building all targets:
@@ -107,15 +109,15 @@ srbuild all [--linux | --qnx]
 To build only specific packages or libraries:
 
 ```bash
-srbuild [--linux | --qnx] target node1 node2 ...
+srbuild target node1 node2 ... [--linux | --qnx]
 ```
 This automatically builds dependencies if required.
 #### Cleaning the build:
 
-To delete the build directory:
+To delete the entire build directory (including `build/qnx` and `build/linux`):
 
 ```bash
-srbuild clean [--linux | --qnx]
+srbuild clean
 ```
 
 #### Parallel jobs:

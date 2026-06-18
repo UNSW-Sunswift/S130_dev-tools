@@ -246,10 +246,14 @@ def pkg_create(paths: PkgPaths, repo_root: Path, target: str) -> None:
         repo_root: Root of the Sunswift repository.
         target: Build target platform, either "QNX" or "LINUX".
     """
+    try:
+        CWD.relative_to(repo_root / "src")
+    except ValueError:
+        die("Error: Packages must be created in src/")    
+    
     if paths.abs_pkg_path.exists():
         die(f"Error: {paths.pkg_name} already exists at '{paths.abs_pkg_path}'")
 
-    # Duplicate target names break CMake — check all of src/ recursively
     location = pkg_exist_elsewhere(paths, repo_root)
     if location is not None:
         die(f"Error: {paths.pkg_name} already exists at '{location}'")
