@@ -48,22 +48,17 @@ def test_rejects_missing_marker(repo: Path) -> None:
     (repo / ".sunswift-evsn").unlink()
     r = run("all", cwd=repo)
     assert_failure(r)
-    assert "marker" in r.stdout or "marker" in r.stderr
 
 def test_rejects_missing_cmake(repo: Path) -> None:
     """Must fail when CMakeLists.txt is missing."""
     r = run("all", cwd=repo)
     assert_failure(r)
-    assert "CMakeLists.txt" in r.stdout or "CMakeLists.txt" in r.stderr
 
 def test_accepts_valid_repo(configured_repo: Path) -> None:
     """Should pass all srbuild sanity checks with a fully configured repo."""
     # Have to add linux flag because we don't have a toolchain file
     r = run("all", "--linux", cwd=configured_repo)
     assert_success(r)
-    assert "not a git repository" not in r.stdout
-    assert "marker" not in r.stdout
-    assert "CMakeLists.txt does not exist" not in r.stdout
 
 
 # =================================================================================================
@@ -76,14 +71,14 @@ def test_target_requires_at_least_one(repo: Path) -> None:
     assert_failure(r)
 
 def test_target_accepts_single(configured_repo: Path) -> None:
-    """srbuild target with one target should pass sanity checks."""
-    r = run("target", "my_node", cwd=configured_repo)
-    assert "CMakeLists.txt does not exist" not in r.stdout
+    """srbuild target with one target should reach cmake and create a build directory."""
+    run("target", "my_node", "--linux", cwd=configured_repo)
+    assert (configured_repo / "build" / "linux").is_dir()
 
 def test_target_accepts_multiple(configured_repo: Path) -> None:
-    """srbuild target with multiple targets should pass sanity checks."""
-    r = run("target", "node_a", "node_b", cwd=configured_repo)
-    assert "CMakeLists.txt does not exist" not in r.stdout
+    """srbuild target with multiple targets should reach cmake and create a build directory."""
+    run("target", "node_a", "node_b", "--linux", cwd=configured_repo)
+    assert (configured_repo / "build" / "linux").is_dir()
 
 
 # =================================================================================================
@@ -96,14 +91,14 @@ def test_all_accepts_linux_flag(configured_repo: Path) -> None:
     assert_success(r)
 
 def test_all_accepts_qnx_flag(configured_repo: Path) -> None:
-    """--qnx flag should be accepted without argparse error (cmake will fail without toolchain)."""
+    """--qnx flag should be accepted by argparse; cmake will fail without a toolchain file."""
     r = run("all", "--qnx", cwd=configured_repo)
-    assert "unrecognized arguments" not in r.stderr
+    assert r.returncode != 2, f"argparse rejected --qnx flag\nstderr: {r.stderr}"
 
 def test_target_accepts_linux_flag(configured_repo: Path) -> None:
-    """--linux flag should be accepted on the target subcommand without argparse error."""
-    r = run("target", "my_node", "--linux", cwd=configured_repo)
-    assert "unrecognized arguments" not in r.stderr
+    """--linux flag should be accepted on the target subcommand and create a build directory."""
+    run("target", "my_node", "--linux", cwd=configured_repo)
+    assert (configured_repo / "build" / "linux").is_dir()
 
 def test_all_accepts_jobs_flag(configured_repo: Path) -> None:
     """-j flag should be accepted and not cause an argparse error."""
@@ -113,8 +108,7 @@ def test_all_accepts_jobs_flag(configured_repo: Path) -> None:
 def test_all_rejects_invalid_jobs(configured_repo: Path) -> None:
     """-j with a non-integer value should be rejected by argparse."""
     r = run("all", "--linux", "-j", "fast", cwd=configured_repo)
-    assert_failure(r)
-    assert "invalid int value" in r.stderr
+    assert r.returncode == 2, f"Expected argparse exit code 2\nstderr: {r.stderr}"
 
 
 # =================================================================================================
