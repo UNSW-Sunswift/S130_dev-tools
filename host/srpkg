@@ -22,7 +22,7 @@
 # param -> files for static params
 #
 # Usage in directory you want to create package in:
-#   - srpkg create <name> [--linux | --qnx]
+#   - srpkg create <name>
 # Usage from anywhere in repository
 #   - srpkg info <name>
 #   - srpkg list
@@ -35,7 +35,7 @@ from typing import Optional
 from datetime import datetime
 from pathlib import Path
 from dataclasses import dataclass
-from common_helpers import resolve_repo_root, validate_repo_root, die, COMPILER_QNX_FLAG, COMPILER_LINUX_FLAG
+from common_helpers import resolve_repo_root, validate_repo_root, die
 
 # =================================================================================================
 # CONSTANTS
@@ -73,9 +73,8 @@ def dir_size(path: Path) -> int:
         if p.is_file()
     )
 
-def fill_readme(paths: PkgPaths, target: str) -> None:
+def fill_readme(paths: PkgPaths) -> None:
     text = f"""# {paths.pkg_name} DDS Package
-Target: {target}
 
 ## Description
 Briefly describe the purpose of this DDS node.
@@ -100,14 +99,8 @@ Written by `Your name here` | `Your zID here`"""
     with (paths.abs_pkg_path / FILES["readme"]).open("w") as file:
         file.write(text)
 
-def fill_cmakelists(paths: PkgPaths, target: str) -> None:
-    # Guard flag is the opposing platform: a Linux package skips when SR_TARGET_QNX is set, and vice versa
-    guard_flag = COMPILER_QNX_FLAG if target == "LINUX" else COMPILER_LINUX_FLAG
-    text = f"""if({guard_flag})
-    return()
-endif()
-
-# Per-node info
+def fill_cmakelists(paths: PkgPaths) -> None:
+    text = f"""# Per-node info
 set(TARGET_NAME {paths.pkg_name})
 set(SOURCES
     src/main.cpp
@@ -221,9 +214,6 @@ def parse_args() -> argparse.Namespace:
     command_info = level1_junction.add_parser("info")
     level1_junction.add_parser("list")
     command_create.add_argument("name", help="Name of package to create (snake_case)")
-    target_group = command_create.add_mutually_exclusive_group()
-    target_group.add_argument("--linux", action="store_true", help="Package to target Linux")
-    target_group.add_argument("--qnx", action="store_true", help="Package to target QNX")
     command_info.add_argument("name", help="Name of package to get info on")
 
     return root_parser.parse_args()
@@ -239,19 +229,18 @@ def mkdir_package(paths: PkgPaths) -> None:
             new_file = file.format(pkg_name=paths.pkg_name)
         (paths.abs_pkg_path / new_file).touch()
 
-def pkg_create(paths: PkgPaths, repo_root: Path, target: str) -> None:
+def pkg_create(paths: PkgPaths, repo_root: Path) -> None:
     """Create a new package in CWD if no name conflict exists under src/.
 
     Args:
         paths: Package name and absolute destination path.
         repo_root: Root of the Sunswift repository.
-        target: Build target platform, either "QNX" or "LINUX".
     """
     try:
         CWD.relative_to(repo_root / "src")
     except ValueError:
-        die("Error: Packages must be created in src/")    
-    
+        die("Error: Packages must be created in src/")
+
     if paths.abs_pkg_path.exists():
         die(f"Error: {paths.pkg_name} already exists at '{paths.abs_pkg_path}'")
 
@@ -261,8 +250,8 @@ def pkg_create(paths: PkgPaths, repo_root: Path, target: str) -> None:
 
     try:
         mkdir_package(paths)
-        fill_readme(paths, target)
-        fill_cmakelists(paths, target)
+        fill_readme(paths)
+        fill_cmakelists(paths)
         fill_param(paths)
         fill_main(paths)
     except Exception as e:
@@ -375,9 +364,8 @@ def main():
 
     cmd = args.command
     if cmd == "create":
-        target = "LINUX" if args.linux else "QNX"
         paths = validate_name(args.name)
-        pkg_create(paths, repo_root, target)
+        pkg_create(paths, repo_root)
     elif cmd == "info":
         paths = validate_name(args.name)
         pkg_info(paths, repo_root)
