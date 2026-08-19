@@ -1,161 +1,137 @@
-# S130 Development tools V1.2.0
+# Sunswift Dev Tools
 
-## Version Notes: v1.2.0
-- Cleaned up repo root checks from Henry's merge
-- Removed repo root checks from `srlaunch`.
-- Added `host/srutils.py` for common logic between `srpkg` and `srbuild`
-- Added toml param file generation and autofilling, as well as autofilling a main file template in `srpkg`
-- Added integration tests for `srpkg` and `srlaunch`
+Developer tooling for SR-Mjolnir and SR-Gungnir, SR8's high level repositories.
+Includes:
 
-## Introduction
-This repository contains high-level development tools for Sunswift embedded and DDS projects. It is separated into host/ and target/. host/ contains the dev tools we are using during development time on our host machines. target/ contains scripts that should be run on the target (NVIDIA Drive THOR computer). It is intended to be a submodule in the SR-Mjolnir repository.
+- `srpkg`: creates a new DDS package in your current working directory
+- `srbuild`: wraps CMake to configure, build, and install targets
 
+Both tools are installed as a [uv](https://docs.astral.sh/uv/) tool.
 
-It includes:
+`srlaunch` (process launcher) has moved to [`deprecated/`](deprecated/). QNX targets should use QNX's own process management. It is being replaced by a cross-platform orchestrator (Seb's thesis).
 
-- `srpkg`: DDS package creation and management tool
-- `srbuild`: Build tool for compiling and deploying DDS packages
-- `srlaunch`: Tool for starting nodes
-- `srdds`: (WORK IN PROGRESS) Tool for managing active nodes
+## Installation
 
-## Getting Started
-
-### 1. Add host dev tools to your PATH
-
-To make `srpkg` and `srbuild` available globally:
+Install globally as a uv tool (recommended):
 
 ```bash
-export PATH="$PATH:<absolute_path_to_repo>/sunswift-dev-tools/host"
+uv tool install git+https://github.com/UNSW-Sunswift/SR-Dev-Tools.git
 ```
-I recommend adding this to your .bashrc
-### 2. Using srpkg
 
-`srpkg` is a tool for creating and managing DDS packages. It must be run from within the repository.
+This puts `srbuild` and `srpkg` on your PATH. To upgrade later:
 
-#### Creating a new DDS package:
-To create a new DDS package in the **current working directory**:
+```bash
+uv tool upgrade sr-dev-tools
+```
+
+For local development on this repo itself:
+
+```bash
+git clone git@github.com:UNSW-Sunswift/SR-Dev-Tools.git
+cd SR-Dev-Tools
+uv tool install --editable .
+```
+
+From a Dockerfile:
+
+```dockerfile
+RUN uv tool install git+https://github.com/UNSW-Sunswift/SR-Dev-Tools.git
+```
+
+## `srpkg`
+
+Creates a new DDS package in the **current working directory**. Same idea as `ros2 pkg create`.
 
 ```bash
 srpkg create <package_name>
 ```
 
-This will create a new directory with the following structure:
+This creates:
 
 ```
 <package_name>/
-├── .srpkg              # Package metadata file
-├── src/                # Source files (.cpp)
-├── include/            # Header files (.hpp)
-├── param/              # Parameter files (JSON)
-├── param/param.json    # Default parameter template
-├── CMakeLists.txt      # Build configuration template
-└── README.md           # Package documentation
+├── .srpkg                             # Package metadata marker
+├── src/
+│   └── main.cpp
+├── include/
+├── test/
+├── param/
+│   └── <package_name>_param.toml
+├── CMakeLists.txt                     # Build configuration template
+└── README.md
 ```
 
-The package will be created in your current working directory.
+Package names must be `snake_case`. `srpkg` only checks for a duplicate name in the current directory and does not search the rest of your repository. If you have a build system which builds multiple executables from different directories, it is on you to make sure no packages (and so executables) share a name.
 
-#### Package information and listing:
-These commands may be used from anywhere in the repository
+## `srbuild`
+
+Invokes CMake to configure, build, and install targets. Assumes top level CMakeLists is at your current working directory, or discovers the repository root (see below).
+
+### Repository root discovery
+
+`srbuild` looks for a `.sunswift-evsn` marker file, walking up from your current directory. The nearest directory containing it is treated as the root, and is assumed to contain your top-level `CMakeLists.txt`.
+
+### Building
 
 ```bash
-# Show information about a specific package
-srpkg info <package_name>
-
-# List all packages in the repository
-srpkg list
-```
-
-### 3. Using srbuild
-
-`srbuild` is a wrapper around CMake that simplifies building DDS packages and targets. It must be run from within the repository, but can be used from anywhere within, not necessarily root.
-
-#### Output:
-`srbuild` automatically creates or overwrites root level `build/` and `deploy/` directories. It builds all objects, libraries and binaries into `build/` (don't bother touching this, it's needed for CMake), then installs all runtime files into `deploy/` for easy deployment (use this).
-```
-SR-Mjolnir/
-├── build/          # CMake-required files
-├── deploy/
-│     ├── bin/       # Node executables
-│     ├── param/
-│     └── tools/     # srlaunch, srdds
-└── ...
-```
-#### Building all targets:
-
-To build and install all available targets in the repository:
-
-```bash
+# Build and install everything
 srbuild all
-```
 
-#### Building specific targets:
-
-To build only specific packages or libraries:
-
-```bash
+# Build and install specific targets
 srbuild target node1 node2 ...
-```
-This automatically builds dependencies if required.
-#### Cleaning the build:
 
-To delete the build directory:
-
-```bash
+# Delete the entire build/ directory
 srbuild clean
 ```
 
-#### Parallel jobs:
+### Platform / toolchain selection
 
-By default, `srbuild` uses 8 parallel jobs for compilation. You can customize this:
+```bash
+srbuild all --linux                              # native build, no toolchain file
+srbuild all --qnx=cmake/qnx_toolchain.cmake       # cross-compile using the given toolchain file
+```
+
+You must supply `--qnx` or `--linux` are mutually exclusive. `--qnx` takes a path to a CMake toolchain file, resolved **relative to your current working directory** (not the discovered repo root).
+
+### Output layout
+
+Given a discovered root, `srbuild` produces:
+
+```
+<root>/
+├── CMakeLists.txt
+├── build/
+│   └── linux/   (or qnx/, depending on the flag used)
+├── deploy/
+│   └── linux/   (or qnx/)
+│       ├── bin/
+│       └── param/
+```
+
+`build/` holds CMake's intermediate files (don't touch it directly). `deploy/` holds the stuff to deploy (duh)
+
+### Parallel jobs
 
 ```bash
 srbuild all --jobs 4
-srbuild target package1 -j 16
+srbuild target node1 -j 16
 ```
-### 4. Using srlaunch
-Run `srlaunch` from the `deploy/tools` directory only. The version in the submodule repo is for version control.
+
+Defaults to 8 parallel jobs.
+
+## Example workflow
+
 ```bash
-cd deploy/tools
-./srlaunch all
-./srlaunch target node1 node2
+cd path/to/your/project/src
+srpkg create my_dds_node
+# fill in my_dds_node/src, include/, and CMakeLists.txt
+
+cd path/to/your/project
+srbuild target my_dds_node
+# or
+srbuild all
 ```
-Then just `Ctrl-C` to shut down all nodes gracefully. It's that easy guys.
-## Example Workflow
-
-1. Create a new DDS package:
-   ```bash
-   cd /path/to/repo/src
-   srpkg create my_dds_node
-   ```
-
-2. Add your source code to `my_dds_node/src/` and headers to `my_dds_node/include/`
-
-3. Fill out the template CMakeLists.txt
-
-3. Add `add_subdirectory(relative/path/to/my_dds_node)` to src/CMakeLists.txt to enable the build
-
-4. Build the package:
-   ```bash
-   srbuild target my_dds_node
-   # or
-   srbuild all
-   ```
-
-5. Launch the node:
-   ```bash
-   # in deploy/tools
-   ./srlaunch target my_dds_node
-   # OR
-   ./srlaunch all
-   ```
-## Notes
-
-- Both tools must be run from within the SR-Mjolnir repository
-- `srpkg` creates packages in the current working directory
-- `srbuild` operates on the entire repository build system
-- `srlaunch` is used from the deploy directory
-- `srdds` is currently work in progress
 
 ## Contributors
-Ryan Wong || z5417983
-Henry Jiang || z5416365
+- Ryan Wong || z5417983
+- Henry Jiang || z5416365
