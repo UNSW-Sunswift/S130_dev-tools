@@ -8,8 +8,8 @@
 #
 # Searches for directory upward for MARKER_FILE and assumes root CMakeLists is here
 # Usage:
-#   - srbuild all [--qnx=<toolchain-file> | --linux]
-#   - srbuild target node1 node2 ... [--qnx=<toolchain-file> | --linux]
+#   - srbuild all (--qnx=<toolchain-file> | --linux)
+#   - srbuild target node1 node2 ... (--qnx=<toolchain-file> | --linux)
 #   - srbuild clean
 ###############################################################################
 
@@ -244,9 +244,9 @@ def parse_args() -> argparse.Namespace:
 
     common_flags = argparse.ArgumentParser(add_help=False)
     common_flags.add_argument("--jobs", "-j", default=8, type=int, help="Number of parallel jobs Make runs. Default=8")
-    platform_flags = common_flags.add_mutually_exclusive_group()
+    platform_flags = common_flags.add_mutually_exclusive_group(required=True)
     platform_flags.add_argument("--qnx", metavar="TOOLCHAIN_FILE", help="Build QNX packages using the given CMake toolchain file (path relative to current working directory)")
-    platform_flags.add_argument("--linux", action="store_true", help="Build Linux (native) packages")
+    platform_flags.add_argument("--linux", action="store_true", help="Build Linux packages")
 
     level1_junction = parser.add_subparsers(dest="command", required=True)
     level1_junction.add_parser("all", parents=[common_flags], help="Build and install all targets")
@@ -268,11 +268,8 @@ def main():
     if getattr(args, "qnx", None):
         target_platform = "qnx"
         toolchain_path = (CWD / args.qnx).resolve()
-    elif getattr(args, "linux", False):
-        target_platform = "linux"
-        toolchain_path = None
     else:
-        target_platform = "native"
+        target_platform = "linux"
         toolchain_path = None
 
     build_dir_path = build_root / "build" / target_platform

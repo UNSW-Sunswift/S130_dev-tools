@@ -72,7 +72,7 @@ def test_uses_marker_root_from_subdirectory(configured_repo: Path) -> None:
 
 def test_target_requires_at_least_one(repo: Path) -> None:
     """srbuild target with no targets specified should fail."""
-    r = run("target", cwd=repo)
+    r = run("target", "--linux", cwd=repo)
     assert_failure(r)
 
 def test_target_accepts_single(configured_repo: Path) -> None:
@@ -95,11 +95,10 @@ def test_all_accepts_linux_flag(configured_repo: Path) -> None:
     r = run("all", "--linux", cwd=configured_repo)
     assert_success(r)
 
-def test_all_accepts_no_flag_as_native(configured_repo: Path) -> None:
-    """No platform flag should default to a native build, same as --linux behaviour-wise."""
+def test_all_requires_platform_flag(configured_repo: Path) -> None:
+    """Neither --qnx nor --linux given should be rejected by argparse."""
     r = run("all", cwd=configured_repo)
-    assert_success(r)
-    assert (configured_repo / "build" / "native").is_dir()
+    assert r.returncode == 2, f"expected argparse rejection\nstderr: {r.stderr}"
 
 def test_all_accepts_qnx_with_toolchain_value(configured_repo: Path) -> None:
     """--qnx=<path> should be accepted by argparse; cmake will fail since the path doesn't exist."""

@@ -69,7 +69,7 @@ Invokes CMake to configure, build, and install targets. Assumes top level CMakeL
 
 ### Repository root discovery
 
-`srbuild` looks for a `.sunswift-evsn` marker file, walking up from your current directory. If found, that directory is treated as the root and assumes your top-level `CMakeLists.txt` lives here. If no marker is found anywhere above the current directory, `srbuild` just uses the current directory as the root instead.. The marker is optional.
+`srbuild` looks for a `.sunswift-evsn` marker file, walking up from your current directory. The nearest directory containing it is treated as the root, and is assumed to contain your top-level `CMakeLists.txt`.
 
 ### Building
 
@@ -89,27 +89,26 @@ srbuild clean
 ```bash
 srbuild all --linux                              # native build, no toolchain file
 srbuild all --qnx=cmake/qnx_toolchain.cmake       # cross-compile using the given toolchain file
-srbuild all                                       # no flag: native build
 ```
 
-`--qnx` and `--linux` are mutually exclusive. `--qnx` takes a path to a CMake toolchain file, resolved **relative to your current working directory** (not the discovered repo root). `srbuild` has no built-in opinion on where that file lives — pass whatever path is correct for your project.
+You must supply `--qnx` or `--linux` are mutually exclusive. `--qnx` takes a path to a CMake toolchain file, resolved **relative to your current working directory** (not the discovered repo root).
 
 ### Output layout
 
-Given a discovered/assumed root, `srbuild` produces:
+Given a discovered root, `srbuild` produces:
 
 ```
 <root>/
 ├── CMakeLists.txt
 ├── build/
-│   ├── native/   (or linux/, qnx/, depending on the flag used)
+│   └── linux/   (or qnx/, depending on the flag used)
 ├── deploy/
-│   └── native/   (or linux/, qnx/)
+│   └── linux/   (or qnx/)
 │       ├── bin/
 │       └── param/
 ```
 
-`build/` holds CMake's intermediate files (don't touch it directly). `deploy/` holds the installed, runnable output.
+`build/` holds CMake's intermediate files (don't touch it directly). `deploy/` holds the stuff to deploy (duh)
 
 ### Parallel jobs
 
