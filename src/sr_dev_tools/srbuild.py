@@ -20,7 +20,7 @@ import shutil
 from typing import Optional
 from pathlib import Path
 from dataclasses import dataclass
-from sr_dev_tools.common_helpers import die
+from sr_dev_tools.common_helpers import die, find_repo_root
 
 # =================================================================================================
 # CONSTANTS
@@ -43,23 +43,6 @@ class BuildData:
 # =================================================================================================
 # HELPERS
 # =================================================================================================
-
-def find_repo_root(cwd: Path) -> Path:
-    """Walk up from `cwd` looking for an empty MARKER_FILE, like git looks for .git.
-
-    Returns the directory containing the marker. Dies if no marker is found in
-    `cwd` or any parent directory.
-    """
-    candidate = cwd.resolve()
-    for directory in (candidate, *candidate.parents):
-        if (directory / MARKER_FILE).exists():
-            return directory
-    die(
-        f"[srbuild] No {MARKER_FILE} marker found in '{cwd}' or any parent directory.\n"
-        f"[srbuild] srbuild requires a {MARKER_FILE} marker file at the root of your project "
-        f"(alongside CMakeLists.txt)."
-    )
-
 
 def safe_rmdir(path: Path, build_root: Path) -> bool:
     """Absolutely every error check again just to confirm before deletion.
@@ -262,7 +245,7 @@ def parse_args() -> argparse.Namespace:
 
 def main():
     # build_root: nearest ancestor of CWD containing a .sunswift-evsn marker (dies if none found)
-    build_root = find_repo_root(CWD)
+    build_root = find_repo_root(CWD, MARKER_FILE)
     args = parse_args()
 
     if getattr(args, "qnx", None):
