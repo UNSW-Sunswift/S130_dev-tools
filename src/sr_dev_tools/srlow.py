@@ -108,7 +108,7 @@ def build(targets: Optional[list[str]], repo_root: Path, preset: str) -> None:
     else:
         available = [d.name for d in (repo_root/SRC_DIR).iterdir() if d.is_dir()]
         exists = [t for t in targets if t in available]
-        missing = [t for t in exists if t not in targets] 
+        missing = [t for t in targets if t not in exists] 
         
         for module in exists:
             full_path = repo_root/SRC_DIR/module
@@ -117,9 +117,12 @@ def build(targets: Optional[list[str]], repo_root: Path, preset: str) -> None:
             else:
                 num_fail.append(full_path.name)
             print("")
-        print(f"[srlow] Build: The following targets are missing:")
-        for t in missing:
-            print(f"[srlow]   - {t}")
+            
+        if len(missing) != 0:
+            print("================= Missing ====================")
+            print(f"[srlow] Build: The following targets are missing:")
+            for t in missing:
+                print(f"[srlow]   - {t}")
     
     print("============== Build Complete ================")
     end_time = time.time()
@@ -131,8 +134,36 @@ def build(targets: Optional[list[str]], repo_root: Path, preset: str) -> None:
     for t in num_fail:
         print(f"[srlow]   - {t}")
 
-def clean():
-    pass
+def clean(repo_root: Path) -> None:
+    """loop through all src/*/. For those with a build/ directory, delete it"""
+    res = input("[srlow] Would you like to clean all build/ directories? (y/n)")
+    if res != "y":
+        die("[srbuild] Cancelling clean..")
+    print("============= Cleaning Targets ================")
+
+    num_pass = []
+    num_fail = []
+    for module in (repo_root/SRC_DIR).iterdir():
+        if not module.is_dir():
+            continue
+
+        build_dir = module/"build"
+        if not build_dir.exists():
+            continue
+
+        print(f"[srlow] Clean: Removing {module.name}/build")
+        if safe_rmdir(build_dir):
+            num_pass.append(module.name)
+        else:
+            num_fail.append(module.name)
+
+    print("============== Clean Complete =================")
+    print(f"[srlow] Clean: Number removed - {len(num_pass)}")
+    for t in num_pass:
+        print(f"[srlow]   - {t}")
+    print(f"[srlow] Clean: Number failed - {len(num_fail)}")
+    for t in num_fail:
+        print(f"[srlow]   - {t}")
 
 def test():
     pass
@@ -177,9 +208,9 @@ def main():
         if args.build_action == "all":
             build(None, repo_root, args.preset)
         elif args.build_action == "clean":
-            print("build clean!")
+            clean(repo_root)
         elif args.build_action == "target":
-            print(args.targets)
+            build(args.targets, repo_root, args.preset)
     elif args.command == "test":
         if args.test_action == "all":
             print("test all!")
