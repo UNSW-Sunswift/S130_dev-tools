@@ -59,13 +59,13 @@ def safe_rmdir(path: Path) -> bool:
 
 def configure_and_build(module_root: Path, preset: str) -> bool:
     """Configures and builds in module root using STM32 presets"""
-    print(f"==== Building {module_root.name} ====")
+    print(f"----------Building {module_root.name}----------")
     if not ((module_root/"CMakeLists.txt").exists() and (module_root/"CMakeLists.txt").is_file()):
         # No CMakeLists in given path
         print(f"[srlow] Module: {module_root.name} doesn't have a CMakeLists.txt, skipping...")
         return False
 
-    if (module_root/"CMakePresets.json").exists() and (module_root/"CMakePresets.json").is_file():
+    if not ((module_root/"CMakePresets.json").exists() and (module_root/"CMakePresets.json").is_file()):
         print(f"[srlow] Module: {module_root.name} doesn't have a CMakePresets.json, skipping...")
         return False
     
@@ -104,6 +104,7 @@ def build(targets: Optional[list[str]], repo_root: Path, preset: str) -> None:
                     num_pass.append(module.name)
                 else:
                     num_fail.append(module.name)
+                print("")
     else:
         available = [d.name for d in (repo_root/SRC_DIR).iterdir() if d.is_dir()]
         exists = [t for t in targets if t in available]
@@ -115,11 +116,12 @@ def build(targets: Optional[list[str]], repo_root: Path, preset: str) -> None:
                 num_pass.append(full_path.name)
             else:
                 num_fail.append(full_path.name)
+            print("")
         print(f"[srlow] Build: The following targets are missing:")
         for t in missing:
             print(f"[srlow]   - {t}")
     
-    print("============= Build Complete ===============")
+    print("============== Build Complete ================")
     end_time = time.time()
     print(f"[srlow] Build finished in {end_time-start_time:.4f} seconds")
     print(f"[srlow] Build: Number passed - {len(num_pass)}")
@@ -167,11 +169,13 @@ def parse_args() -> argparse.Namespace:
 
 def main():
     repo_root = find_repo_root(CWD, MARKER_FILE)
+    if not (repo_root/SRC_DIR).exists() or not (repo_root/SRC_DIR).is_dir():
+        die(f"[srlow] src directory not found in {repo_root}")
     args = parse_args()
     
     if args.command == "build":
         if args.build_action == "all":
-            print("build all!")
+            build(None, repo_root, args.preset)
         elif args.build_action == "clean":
             print("build clean!")
         elif args.build_action == "target":
